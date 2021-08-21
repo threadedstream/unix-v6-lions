@@ -1,0 +1,290 @@
+
+<html>
+<head>
+<title>main.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line1500">1500: </a><font color="#000000">#</font>
+<a name="line1501">1501: </a><font color="#000000">#include "../param.h"</font>
+<a name="line1502">1502: </a><font color="#000000">#include "../user.h"</font>
+<a name="line1503">1503: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line1504">1504: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line1505">1505: </a><font color="#000000">#include "../text.h"</font>
+<a name="line1506">1506: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line1507">1507: </a><font color="#000000">#include "../seg.h"</font>
+<a name="line1508">1508: </a>
+<a name="line1509">1509: </a><font color="#000000">#define CLOCK1  0177546</font>
+<a name="line1510">1510: </a><font color="#000000">#define CLOCK2  0172540</font>
+<a name="line1511">1511: </a><font color="#800000">/*</font>
+<a name="line1512">1512: </a><font color="#800000"> * Icode is the octal bootstrap</font>
+<a name="line1513">1513: </a><font color="#800000"> * program executed in user mode</font>
+<a name="line1514">1514: </a><font color="#800000"> * to bring up the system.</font>
+<a name="line1515">1515: </a><font color="#800000"> */</font>
+<a name="line1516">1516: </a>int     icode[]
+<a name="line1517">1517: </a>{
+<a name="line1518">1518: </a>        0104413,        <font color="#800000">/* sys exec; init; initp */</font>
+<a name="line1519">1519: </a>        0000014,
+<a name="line1520">1520: </a>        0000010,
+<a name="line1521">1521: </a>        0000777,        <font color="#800000">/* br . */</font>
+<a name="line1522">1522: </a>        0000014,        <font color="#800000">/* initp: init; 0 */</font>
+<a name="line1523">1523: </a>        0000000,
+<a name="line1524">1524: </a>        0062457,        <font color="#800000">/* init: &lt;/etc/init\0&gt; */</font>
+<a name="line1525">1525: </a>        0061564,
+<a name="line1526">1526: </a>        0064457,
+<a name="line1527">1527: </a>        0064556,
+<a name="line1528">1528: </a>        0000164,
+<a name="line1529">1529: </a>};
+<a name="line1530">1530: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1531">1531: </a>
+<a name="line1532">1532: </a><font color="#800000">/*</font>
+<a name="line1533">1533: </a><font color="#800000"> * Initialization code.</font>
+<a name="line1534">1534: </a><font color="#800000"> * Called from m40.s or m45.s as</font>
+<a name="line1535">1535: </a><font color="#800000"> * soon as a stack and segmentation</font>
+<a name="line1536">1536: </a><font color="#800000"> * have been established.</font>
+<a name="line1537">1537: </a><font color="#800000"> * Functions:</font>
+<a name="line1538">1538: </a><font color="#800000"> *      clear and free user core</font>
+<a name="line1539">1539: </a><font color="#800000"> *      find which clock is configured</font>
+<a name="line1540">1540: </a><font color="#800000"> *      hand craft 0th process</font>
+<a name="line1541">1541: </a><font color="#800000"> *      call all initialization routines</font>
+<a name="line1542">1542: </a><font color="#800000"> *      fork - process 0 to schedule</font>
+<a name="line1543">1543: </a><font color="#800000"> *           - process 1 execute bootstrap</font>
+<a name="line1544">1544: </a><font color="#800000"> *</font>
+<a name="line1545">1545: </a><font color="#800000"> * panic: no clock -- neither clock responds</font>
+<a name="line1546">1546: </a><font color="#800000"> * loop at loc 6 in user mode -- /etc/init</font>
+<a name="line1547">1547: </a><font color="#800000"> *      cannot be executed.</font>
+<a name="line1548">1548: </a><font color="#800000"> */</font>
+<a name="line1549">1549: </a>
+<a name="line1550">1550: </a><font color="#000000"><a name="ain"></a>main()</font>
+<a name="line1551">1551: </a>{
+<a name="line1552">1552: </a>        extern schar;
+<a name="line1553">1553: </a>        register i, *p;
+<a name="line1554">1554: </a>
+<a name="line1555">1555: </a>        <font color="#800000">/*</font>
+<a name="line1556">1556: </a><font color="#800000">         * zero and free all of core</font>
+<a name="line1557">1557: </a><font color="#800000">         */</font>
+<a name="line1558">1558: </a>
+<a name="line1559">1559: </a>        updlock = 0;
+<a name="line1560">1560: </a>        i = *ka6 + USIZE;
+<a name="line1561">1561: </a>        UISD-&gt;r[0] = 077406;
+<a name="line1562">1562: </a>        <font color="#000000">for</font>(;;) {
+<a name="line1563">1563: </a>                UISA-&gt;r[0] = i;
+<a name="line1564">1564: </a>                <font color="#000000">if</font>(fuibyte(0) &lt; 0)
+<a name="line1565">1565: </a>                        <font color="#000000">break</font>;
+<a name="line1566">1566: </a>                clearseg(i);
+<a name="line1567">1567: </a>                maxmem++;
+<a name="line1568">1568: </a>                mfree(coremap, 1, i);
+<a name="line1569">1569: </a>                i++;
+<a name="line1570">1570: </a>        }
+<a name="line1571">1571: </a>        <font color="#000000">if</font>(cputype == 70)
+<a name="line1572">1572: </a>        <font color="#000000">for</font>(i=0; i&lt;62; i=+2) {
+<a name="line1573">1573: </a>                UBMAP-&gt;r[i] = i&lt;&lt;12;
+<a name="line1574">1574: </a>                UBMAP-&gt;r[i+1] = 0;
+<a name="line1575">1575: </a>        }
+<a name="line1576">1576: </a>        printf(<font color="#000000">"mem = %l\n"</font>, maxmem*5/16);
+<a name="line1577">1577: </a>
+<a name="line1578">1578: </a>
+<a name="line1579">1579: </a>
+<a name="line1580">1580: </a>
+<a name="line1581">1581: </a>
+<a name="line1582">1582: </a>        maxmem = min(maxmem, MAXMEM);
+<a name="line1583">1583: </a>        mfree(swapmap, nswap, swplo);
+<a name="line1584">1584: </a>
+<a name="line1585">1585: </a>        <font color="#800000">/*</font>
+<a name="line1586">1586: </a><font color="#800000">         * set up system process</font>
+<a name="line1587">1587: </a><font color="#800000">         */</font>
+<a name="line1588">1588: </a>
+<a name="line1589">1589: </a>        proc[0].p_addr = *ka6;
+<a name="line1590">1590: </a>        proc[0].p_size = USIZE;
+<a name="line1591">1591: </a>        proc[0].p_stat = SRUN;
+<a name="line1592">1592: </a>        proc[0].p_flag =| SLOAD|SSYS;
+<a name="line1593">1593: </a>        u.u_procp = &amp;proc[0];
+<a name="line1594">1594: </a>
+<a name="line1595">1595: </a>        <font color="#800000">/*</font>
+<a name="line1596">1596: </a><font color="#800000">         * determine clock</font>
+<a name="line1597">1597: </a><font color="#800000">         */</font>
+<a name="line1598">1598: </a>
+<a name="line1599">1599: </a>        UISA-&gt;r[7] = ka6[1]; <font color="#800000">/* io segment */</font>
+<a name="line1600">1600: </a>        UISD-&gt;r[7] = 077406;
+<a name="line1601">1601: </a>        lks = CLOCK1;
+<a name="line1602">1602: </a>        <font color="#000000">if</font>(fuiword(lks) == -1) {
+<a name="line1603">1603: </a>                lks = CLOCK2;
+<a name="line1604">1604: </a>                <font color="#000000">if</font>(fuiword(lks) == -1)
+<a name="line1605">1605: </a>                        panic(<font color="#000000">"no clock"</font>);
+<a name="line1606">1606: </a>        }
+<a name="line1607">1607: </a>
+<a name="line1608">1608: </a>        <font color="#800000">/*</font>
+<a name="line1609">1609: </a><font color="#800000">         * set up 'known' i-nodes</font>
+<a name="line1610">1610: </a><font color="#800000">         */</font>
+<a name="line1611">1611: </a>
+<a name="line1612">1612: </a>        *lks = 0115;
+<a name="line1613">1613: </a>        cinit();
+<a name="line1614">1614: </a>        binit();
+<a name="line1615">1615: </a>        iinit();
+<a name="line1616">1616: </a>        rootdir = iget(rootdev, ROOTINO);
+<a name="line1617">1617: </a>        rootdir-&gt;i_flag =&amp; ~ILOCK;
+<a name="line1618">1618: </a>        u.u_cdir = iget(rootdev, ROOTINO);
+<a name="line1619">1619: </a>        u.u_cdir-&gt;i_flag =&amp; ~ILOCK;
+<a name="line1620">1620: </a>
+<a name="line1621">1621: </a>        <font color="#800000">/*</font>
+<a name="line1622">1622: </a><font color="#800000">         * make init process</font>
+<a name="line1623">1623: </a><font color="#800000">         * enter scheduling loop</font>
+<a name="line1624">1624: </a><font color="#800000">         * with system process</font>
+<a name="line1625">1625: </a><font color="#800000">         */</font>
+<a name="line1626">1626: </a>
+<a name="line1627">1627: </a>        <font color="#000000">if</font>(newproc()) {
+<a name="line1628">1628: </a>                expand(USIZE+1);
+<a name="line1629">1629: </a>                estabur(0, 1, 0, 0);
+<a name="line1630">1630: </a>                copyout(icode, 0, <font color="#000000">sizeof</font> icode);
+<a name="line1631">1631: </a>                <font color="#800000">/*</font>
+<a name="line1632">1632: </a><font color="#800000">                 * Return goes to loc. 0 of user init</font>
+<a name="line1633">1633: </a><font color="#800000">                 * code just copied out.</font>
+<a name="line1634">1634: </a><font color="#800000">                 */</font>
+<a name="line1635">1635: </a>                <font color="#000000">return</font>;
+<a name="line1636">1636: </a>        }
+<a name="line1637">1637: </a>        sched();
+<a name="line1638">1638: </a>}
+<a name="line1639">1639: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1640">1640: </a>
+<a name="line1641">1641: </a><font color="#800000">/*</font>
+<a name="line1642">1642: </a><font color="#800000"> * Set up software prototype segmentation</font>
+<a name="line1643">1643: </a><font color="#800000"> * registers to implement the 3 pseudo</font>
+<a name="line1644">1644: </a><font color="#800000"> * text,data,stack segment sizes passed</font>
+<a name="line1645">1645: </a><font color="#800000"> * as arguments.</font>
+<a name="line1646">1646: </a><font color="#800000"> * The argument sep specifies if the</font>
+<a name="line1647">1647: </a><font color="#800000"> * text and data+stack segments are to</font>
+<a name="line1648">1648: </a><font color="#800000"> * be separated.</font>
+<a name="line1649">1649: </a><font color="#800000"> */</font>
+<a name="line1650">1650: </a><font color="#000000"><a name="stabur"></a>estabur(nt, nd, ns, sep)</font>
+<a name="line1651">1651: </a>{
+<a name="line1652">1652: </a>        register a, *ap, *dp;
+<a name="line1653">1653: </a>
+<a name="line1654">1654: </a>        <font color="#000000">if</font>(sep) {
+<a name="line1655">1655: </a>                <font color="#000000">if</font>(cputype == 40)
+<a name="line1656">1656: </a>                        <font color="#000000">goto</font> err;
+<a name="line1657">1657: </a>                <font color="#000000">if</font>(nseg(nt) &gt; 8 || nseg(nd)+nseg(ns) &gt; 8)
+<a name="line1658">1658: </a>                        <font color="#000000">goto</font> err;
+<a name="line1659">1659: </a>        } <font color="#000000">else</font>
+<a name="line1660">1660: </a>                <font color="#000000">if</font>(nseg(nt)+nseg(nd)+nseg(ns) &gt; 8)
+<a name="line1661">1661: </a>                        <font color="#000000">goto</font> err;
+<a name="line1662">1662: </a>        <font color="#000000">if</font>(nt+nd+ns+USIZE &gt; maxmem)
+<a name="line1663">1663: </a>                <font color="#000000">goto</font> err;
+<a name="line1664">1664: </a>        a = 0;
+<a name="line1665">1665: </a>        ap = &amp;u.u_uisa[0];
+<a name="line1666">1666: </a>        dp = &amp;u.u_uisd[0];
+<a name="line1667">1667: </a>        <font color="#000000">while</font>(nt &gt;= 128) {
+<a name="line1668">1668: </a>                *dp++ = (127&lt;&lt;8) | RO;
+<a name="line1669">1669: </a>                *ap++ = a;
+<a name="line1670">1670: </a>                a =+ 128;
+<a name="line1671">1671: </a>                nt =- 128;
+<a name="line1672">1672: </a>        }
+<a name="line1673">1673: </a>        <font color="#000000">if</font>(nt) {
+<a name="line1674">1674: </a>                *dp++ = ((nt-1)&lt;&lt;8) | RO;
+<a name="line1675">1675: </a>                *ap++ = a;
+<a name="line1676">1676: </a>        }
+<a name="line1677">1677: </a>        <font color="#000000">if</font>(sep)
+<a name="line1678">1678: </a>        <font color="#000000">while</font>(ap &lt; &amp;u.u_uisa[8]) {
+<a name="line1679">1679: </a>                *ap++ = 0;
+<a name="line1680">1680: </a>                *dp++ = 0;
+<a name="line1681">1681: </a>        }
+<a name="line1682">1682: </a>        a = USIZE;
+<a name="line1683">1683: </a>        <font color="#000000">while</font>(nd &gt;= 128) {
+<a name="line1684">1684: </a>                *dp++ = (127&lt;&lt;8) | RW;
+<a name="line1685">1685: </a>                *ap++ = a;
+<a name="line1686">1686: </a>                a =+ 128;
+<a name="line1687">1687: </a>                nd =- 128;
+<a name="line1688">1688: </a>        }
+<a name="line1689">1689: </a>        <font color="#000000">if</font>(nd) {
+<a name="line1690">1690: </a>                *dp++ = ((nd-1)&lt;&lt;8) | RW;
+<a name="line1691">1691: </a>                *ap++ = a;
+<a name="line1692">1692: </a>                a =+ nd;
+<a name="line1693">1693: </a>        }
+<a name="line1694">1694: </a>        <font color="#000000">while</font>(ap &lt; &amp;u.u_uisa[8]) {
+<a name="line1695">1695: </a>                *dp++ = 0;
+<a name="line1696">1696: </a>                *ap++ = 0;
+<a name="line1697">1697: </a>        }
+<a name="line1698">1698: </a>        <font color="#000000">if</font>(sep)
+<a name="line1699">1699: </a>        <font color="#000000">while</font>(ap &lt; &amp;u.u_uisa[16]) {
+<a name="line1700">1700: </a>                *dp++ = 0;
+<a name="line1701">1701: </a>                *ap++ = 0;
+<a name="line1702">1702: </a>        }
+<a name="line1703">1703: </a>        a =+ ns;
+<a name="line1704">1704: </a>        <font color="#000000">while</font>(ns &gt;= 128) {
+<a name="line1705">1705: </a>                a =- 128;
+<a name="line1706">1706: </a>                ns =- 128;
+<a name="line1707">1707: </a>                *--dp = (127&lt;&lt;8) | RW;
+<a name="line1708">1708: </a>                *--ap = a;
+<a name="line1709">1709: </a>        }
+<a name="line1710">1710: </a>        <font color="#000000">if</font>(ns) {
+<a name="line1711">1711: </a>                *--dp = ((128-ns)&lt;&lt;8) | RW | ED;
+<a name="line1712">1712: </a>                *--ap = a-128;
+<a name="line1713">1713: </a>        }
+<a name="line1714">1714: </a>        <font color="#000000">if</font>(!sep) {
+<a name="line1715">1715: </a>                ap = &amp;u.u_uisa[0];
+<a name="line1716">1716: </a>                dp = &amp;u.u_uisa[8];
+<a name="line1717">1717: </a>                <font color="#000000">while</font>(ap &lt; &amp;u.u_uisa[8])
+<a name="line1718">1718: </a>                        *dp++ = *ap++;
+<a name="line1719">1719: </a>                ap = &amp;u.u_uisd[0];
+<a name="line1720">1720: </a>                dp = &amp;u.u_uisd[8];
+<a name="line1721">1721: </a>                <font color="#000000">while</font>(ap &lt; &amp;u.u_uisd[8])
+<a name="line1722">1722: </a>                        *dp++ = *ap++;
+<a name="line1723">1723: </a>        }
+<a name="line1724">1724: </a>        sureg();
+<a name="line1725">1725: </a>        <font color="#000000">return</font>(0);
+<a name="line1726">1726: </a>
+<a name="line1727">1727: </a><font color="#000000">err:</font>
+<a name="line1728">1728: </a>        u.u_error = ENOMEM;
+<a name="line1729">1729: </a>        <font color="#000000">return</font>(-1);
+<a name="line1730">1730: </a>}
+<a name="line1731">1731: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1732">1732: </a>
+<a name="line1733">1733: </a><font color="#800000">/*</font>
+<a name="line1734">1734: </a><font color="#800000"> * Load the user hardware segmentation</font>
+<a name="line1735">1735: </a><font color="#800000"> * registers from the software prototype.</font>
+<a name="line1736">1736: </a><font color="#800000"> * The software registers must have</font>
+<a name="line1737">1737: </a><font color="#800000"> * been setup prior by estabur.</font>
+<a name="line1738">1738: </a><font color="#800000"> */</font>
+<a name="line1739">1739: </a><font color="#000000"><a name="ureg"></a>sureg()</font>
+<a name="line1740">1740: </a>{
+<a name="line1741">1741: </a>        register *up, *rp, a;
+<a name="line1742">1742: </a>
+<a name="line1743">1743: </a>        a = u.u_procp-&gt;p_addr;
+<a name="line1744">1744: </a>        up = &amp;u.u_uisa[16];
+<a name="line1745">1745: </a>        rp = &amp;UISA-&gt;r[16];
+<a name="line1746">1746: </a>        <font color="#000000">if</font>(cputype == 40) {
+<a name="line1747">1747: </a>                up =- 8;
+<a name="line1748">1748: </a>                rp =- 8;
+<a name="line1749">1749: </a>        }
+<a name="line1750">1750: </a>        <font color="#000000">while</font>(rp &gt; &amp;UISA-&gt;r[0])
+<a name="line1751">1751: </a>                *--rp = *--up + a;
+<a name="line1752">1752: </a>        <font color="#000000">if</font>((up=u.u_procp-&gt;p_textp) != NULL)
+<a name="line1753">1753: </a>                a =- up-&gt;x_caddr;
+<a name="line1754">1754: </a>        up = &amp;u.u_uisd[16];
+<a name="line1755">1755: </a>        rp = &amp;UISD-&gt;r[16];
+<a name="line1756">1756: </a>        <font color="#000000">if</font>(cputype == 40) {
+<a name="line1757">1757: </a>                up =- 8;
+<a name="line1758">1758: </a>                rp =- 8;
+<a name="line1759">1759: </a>        }
+<a name="line1760">1760: </a>        <font color="#000000">while</font>(rp &gt; &amp;UISD-&gt;r[0]) {
+<a name="line1761">1761: </a>                *--rp = *--up;
+<a name="line1762">1762: </a>                <font color="#000000">if</font>((*rp &amp; WO) == 0)
+<a name="line1763">1763: </a>                        rp[(UISA-UISD)/2] =- a;
+<a name="line1764">1764: </a>        }
+<a name="line1765">1765: </a>}
+<a name="line1766">1766: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1767">1767: </a>
+<a name="line1768">1768: </a><font color="#800000">/*</font>
+<a name="line1769">1769: </a><font color="#800000"> * Return the arg/128 rounded up.</font>
+<a name="line1770">1770: </a><font color="#800000"> */</font>
+<a name="line1771">1771: </a><font color="#000000"><a name="seg"></a>nseg(n)</font>
+<a name="line1772">1772: </a>{
+<a name="line1773">1773: </a>
+<a name="line1774">1774: </a>        <font color="#000000">return</font>((n+127)&gt;&gt;7);
+<a name="line1775">1775: </a>}
+<a name="line1776">1776: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>
