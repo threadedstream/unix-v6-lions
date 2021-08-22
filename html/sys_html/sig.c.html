@@ -1,0 +1,400 @@
+
+<html>
+<head>
+<title>sig.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line3900">3900: </a><font color="#000000">#</font>
+<a name="line3901">3901: </a><font color="#800000">/*</font>
+<a name="line3902">3902: </a><font color="#800000"> */</font>
+<a name="line3903">3903: </a>
+<a name="line3904">3904: </a><font color="#000000">#include "../param.h"</font>
+<a name="line3905">3905: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line3906">3906: </a><font color="#000000">#include "../user.h"</font>
+<a name="line3907">3907: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line3908">3908: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line3909">3909: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line3910">3910: </a>
+<a name="line3911">3911: </a><font color="#800000">/*</font>
+<a name="line3912">3912: </a><font color="#800000"> * Priority for tracing</font>
+<a name="line3913">3913: </a><font color="#800000"> */</font>
+<a name="line3914">3914: </a><font color="#000000">#define IPCPRI  (-1)</font>
+<a name="line3915">3915: </a>
+<a name="line3916">3916: </a><font color="#800000">/*</font>
+<a name="line3917">3917: </a><font color="#800000"> * Structure to access an array of integers.</font>
+<a name="line3918">3918: </a><font color="#800000"> */</font>
+<a name="line3919">3919: </a><font color="#000000">struct</font>
+<a name="line3920">3920: </a>{
+<a name="line3921">3921: </a>        int     inta[];
+<a name="line3922">3922: </a>};
+<a name="line3923">3923: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3924">3924: </a>
+<a name="line3925">3925: </a><font color="#800000">/*</font>
+<a name="line3926">3926: </a><font color="#800000"> * Tracing variables.</font>
+<a name="line3927">3927: </a><font color="#800000"> * Used to pass trace command from</font>
+<a name="line3928">3928: </a><font color="#800000"> * parent to child being traced.</font>
+<a name="line3929">3929: </a><font color="#800000"> * This data base cannot be</font>
+<a name="line3930">3930: </a><font color="#800000"> * shared and is locked</font>
+<a name="line3931">3931: </a><font color="#800000"> * per user.</font>
+<a name="line3932">3932: </a><font color="#800000"> */</font>
+<a name="line3933">3933: </a><font color="#000000">struct</font>
+<a name="line3934">3934: </a>{
+<a name="line3935">3935: </a>        int     ip_lock;
+<a name="line3936">3936: </a>        int     ip_req;
+<a name="line3937">3937: </a>        int     ip_addr;
+<a name="line3938">3938: </a>        int     ip_data;
+<a name="line3939">3939: </a>} ipc;
+<a name="line3940">3940: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3941">3941: </a>
+<a name="line3942">3942: </a><font color="#800000">/*</font>
+<a name="line3943">3943: </a><font color="#800000"> * Send the specified signal to</font>
+<a name="line3944">3944: </a><font color="#800000"> * all processes with 'tp' as its</font>
+<a name="line3945">3945: </a><font color="#800000"> * controlling teletype.</font>
+<a name="line3946">3946: </a><font color="#800000"> * Called by tty.c for quits and</font>
+<a name="line3947">3947: </a><font color="#800000"> * interrupts.</font>
+<a name="line3948">3948: </a><font color="#800000"> */</font>
+<a name="line3949">3949: </a><font color="#000000"><a name="ignal"></a>signal(tp, sig)</font>
+<a name="line3950">3950: </a>{
+<a name="line3951">3951: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line3952">3952: </a>
+<a name="line3953">3953: </a>        <font color="#000000">for</font>(p = &amp;proc[0]; p &lt; &amp;proc[NPROC]; p++)
+<a name="line3954">3954: </a>                <font color="#000000">if</font>(p-&gt;p_ttyp == tp)
+<a name="line3955">3955: </a>                        psignal(p, sig);
+<a name="line3956">3956: </a>}
+<a name="line3957">3957: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3958">3958: </a>
+<a name="line3959">3959: </a><font color="#800000">/*</font>
+<a name="line3960">3960: </a><font color="#800000"> * Send the specified signal to</font>
+<a name="line3961">3961: </a><font color="#800000"> * the specified process.</font>
+<a name="line3962">3962: </a><font color="#800000"> */</font>
+<a name="line3963">3963: </a><font color="#000000"><a name="signal"></a>psignal(p, sig)</font>
+<a name="line3964">3964: </a>int *p;
+<a name="line3965">3965: </a>{
+<a name="line3966">3966: </a>        register *rp;
+<a name="line3967">3967: </a>
+<a name="line3968">3968: </a>        <font color="#000000">if</font>(sig &gt;= NSIG)
+<a name="line3969">3969: </a>                <font color="#000000">return</font>;
+<a name="line3970">3970: </a>        rp = p;
+<a name="line3971">3971: </a>        <font color="#000000">if</font>(rp-&gt;p_sig != SIGKIL)
+<a name="line3972">3972: </a>                rp-&gt;p_sig = sig;
+<a name="line3973">3973: </a>        <font color="#000000">if</font>(rp-&gt;p_stat &gt; PUSER)
+<a name="line3974">3974: </a>                rp-&gt;p_stat = PUSER;
+<a name="line3975">3975: </a>        <font color="#000000">if</font>(rp-&gt;p_stat == SWAIT)
+<a name="line3976">3976: </a>                setrun(rp);
+<a name="line3977">3977: </a>}
+<a name="line3978">3978: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3979">3979: </a>
+<a name="line3980">3980: </a><font color="#800000">/*</font>
+<a name="line3981">3981: </a><font color="#800000"> * Returns true if the current</font>
+<a name="line3982">3982: </a><font color="#800000"> * process has a signal to process.</font>
+<a name="line3983">3983: </a><font color="#800000"> * This is asked at least once</font>
+<a name="line3984">3984: </a><font color="#800000"> * each time a process enters the</font>
+<a name="line3985">3985: </a><font color="#800000"> * system.</font>
+<a name="line3986">3986: </a><font color="#800000"> * A signal does not do anything</font>
+<a name="line3987">3987: </a><font color="#800000"> * directly to a process; it sets</font>
+<a name="line3988">3988: </a><font color="#800000"> * a flag that asks the process to</font>
+<a name="line3989">3989: </a><font color="#800000"> * do something to itself.</font>
+<a name="line3990">3990: </a><font color="#800000"> */</font>
+<a name="line3991">3991: </a><font color="#000000"><a name="ssig"></a>issig()</font>
+<a name="line3992">3992: </a>{
+<a name="line3993">3993: </a>        register n;
+<a name="line3994">3994: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line3995">3995: </a>
+<a name="line3996">3996: </a>        p = u.u_procp;
+<a name="line3997">3997: </a>        <font color="#000000">if</font>(n = p-&gt;p_sig) {
+<a name="line3998">3998: </a>                <font color="#000000">if</font> (p-&gt;p_flag&amp;STRC) {
+<a name="line3999">3999: </a>                        stop();
+<a name="line4000">4000: </a>                        <font color="#000000">if</font> ((n = p-&gt;p_sig) == 0)
+<a name="line4001">4001: </a>                                <font color="#000000">return</font>(0);
+<a name="line4002">4002: </a>                }
+<a name="line4003">4003: </a>                <font color="#000000">if</font>((u.u_signal[n]&amp;1) == 0)
+<a name="line4004">4004: </a>                        <font color="#000000">return</font>(n);
+<a name="line4005">4005: </a>        }
+<a name="line4006">4006: </a>        <font color="#000000">return</font>(0);
+<a name="line4007">4007: </a>}
+<a name="line4008">4008: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4009">4009: </a>
+<a name="line4010">4010: </a><font color="#800000">/*</font>
+<a name="line4011">4011: </a><font color="#800000"> * Enter the tracing STOP state.</font>
+<a name="line4012">4012: </a><font color="#800000"> * In this state, the parent is</font>
+<a name="line4013">4013: </a><font color="#800000"> * informed and the process is able to</font>
+<a name="line4014">4014: </a><font color="#800000"> * receive commands from the parent.</font>
+<a name="line4015">4015: </a><font color="#800000"> */</font>
+<a name="line4016">4016: </a><font color="#000000"><a name="top"></a>stop()</font>
+<a name="line4017">4017: </a>{
+<a name="line4018">4018: </a>        register <font color="#000000">struct proc</font> *pp, *cp;
+<a name="line4019">4019: </a>
+<a name="line4020">4020: </a><font color="#000000">loop:</font>
+<a name="line4021">4021: </a>        cp = u.u_procp;
+<a name="line4022">4022: </a>        <font color="#000000">if</font>(cp-&gt;p_ppid != 1)
+<a name="line4023">4023: </a>        <font color="#000000">for</font> (pp = &amp;proc[0]; pp &lt; &amp;proc[NPROC]; pp++)
+<a name="line4024">4024: </a>                <font color="#000000">if</font> (pp-&gt;p_pid == cp-&gt;p_ppid) {
+<a name="line4025">4025: </a>                        wakeup(pp);
+<a name="line4026">4026: </a>                        cp-&gt;p_stat = SSTOP;
+<a name="line4027">4027: </a>                        swtch();
+<a name="line4028">4028: </a>                        <font color="#000000">if</font> ((cp-&gt;p_flag&amp;STRC)==0 || procxmt())
+<a name="line4029">4029: </a>                                <font color="#000000">return</font>;
+<a name="line4030">4030: </a>                        <font color="#000000">goto</font> loop;
+<a name="line4031">4031: </a>                }
+<a name="line4032">4032: </a>        exit();
+<a name="line4033">4033: </a>}
+<a name="line4034">4034: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4035">4035: </a>
+<a name="line4036">4036: </a><font color="#800000">/*</font>
+<a name="line4037">4037: </a><font color="#800000"> * Perform the action specified by</font>
+<a name="line4038">4038: </a><font color="#800000"> * the current signal.</font>
+<a name="line4039">4039: </a><font color="#800000"> * The usual sequence is:</font>
+<a name="line4040">4040: </a><font color="#800000"> *      if(issig())</font>
+<a name="line4041">4041: </a><font color="#800000"> *              psig();</font>
+<a name="line4042">4042: </a><font color="#800000"> */</font>
+<a name="line4043">4043: </a><font color="#000000"><a name="sig"></a>psig()</font>
+<a name="line4044">4044: </a>{
+<a name="line4045">4045: </a>        register n, p;
+<a name="line4046">4046: </a>        register *rp;
+<a name="line4047">4047: </a>
+<a name="line4048">4048: </a>        rp = u.u_procp;
+<a name="line4049">4049: </a>        n = rp-&gt;p_sig;
+<a name="line4050">4050: </a>        rp-&gt;p_sig = 0;
+<a name="line4051">4051: </a>        <font color="#000000">if</font>((p=u.u_signal[n]) != 0) {
+<a name="line4052">4052: </a>                u.u_error = 0;
+<a name="line4053">4053: </a>                <font color="#000000">if</font>(n != SIGINS &amp;&amp; n != SIGTRC)
+<a name="line4054">4054: </a>                        u.u_signal[n] = 0;
+<a name="line4055">4055: </a>                n = u.u_ar0[R6] - 4;
+<a name="line4056">4056: </a>                grow(n);
+<a name="line4057">4057: </a>                suword(n+2, u.u_ar0[RPS]);
+<a name="line4058">4058: </a>                suword(n, u.u_ar0[R7]);
+<a name="line4059">4059: </a>                u.u_ar0[R6] = n;
+<a name="line4060">4060: </a>                u.u_ar0[RPS] =&amp; ~TBIT;
+<a name="line4061">4061: </a>                u.u_ar0[R7] = p;
+<a name="line4062">4062: </a>                <font color="#000000">return</font>;
+<a name="line4063">4063: </a>        }
+<a name="line4064">4064: </a>        <font color="#000000">switch</font>(n) {
+<a name="line4065">4065: </a>
+<a name="line4066">4066: </a>        <font color="#000000">case</font> SIGQIT:
+<a name="line4067">4067: </a>        <font color="#000000">case</font> SIGINS:
+<a name="line4068">4068: </a>        <font color="#000000">case</font> SIGTRC:
+<a name="line4069">4069: </a>        <font color="#000000">case</font> SIGIOT:
+<a name="line4070">4070: </a>        <font color="#000000">case</font> SIGEMT:
+<a name="line4071">4071: </a>        <font color="#000000">case</font> SIGFPT:
+<a name="line4072">4072: </a>        <font color="#000000">case</font> SIGBUS:
+<a name="line4073">4073: </a>        <font color="#000000">case</font> SIGSEG:
+<a name="line4074">4074: </a>        <font color="#000000">case</font> SIGSYS:
+<a name="line4075">4075: </a>                u.u_arg[0] = n;
+<a name="line4076">4076: </a>                <font color="#000000">if</font>(core())
+<a name="line4077">4077: </a>                        n =+ 0200;
+<a name="line4078">4078: </a>        }
+<a name="line4079">4079: </a>        u.u_arg[0] = (u.u_ar0[R0]&lt;&lt;8) | n;
+<a name="line4080">4080: </a>        exit();
+<a name="line4081">4081: </a>}
+<a name="line4082">4082: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4083">4083: </a>
+<a name="line4084">4084: </a><font color="#800000">/*</font>
+<a name="line4085">4085: </a><font color="#800000"> * Create a core image on the file "core"</font>
+<a name="line4086">4086: </a><font color="#800000"> * If you are looking for protection glitches,</font>
+<a name="line4087">4087: </a><font color="#800000"> * there are probably a wealth of them here</font>
+<a name="line4088">4088: </a><font color="#800000"> * when this occurs to a suid command.</font>
+<a name="line4089">4089: </a><font color="#800000"> *</font>
+<a name="line4090">4090: </a><font color="#800000"> * It writes USIZE block of the</font>
+<a name="line4091">4091: </a><font color="#800000"> * user.h area followed by the entire</font>
+<a name="line4092">4092: </a><font color="#800000"> * data+stack segments.</font>
+<a name="line4093">4093: </a><font color="#800000"> */</font>
+<a name="line4094">4094: </a><font color="#000000"><a name="ore"></a>core()</font>
+<a name="line4095">4095: </a>{
+<a name="line4096">4096: </a>        register s, *ip;
+<a name="line4097">4097: </a>        extern schar;
+<a name="line4098">4098: </a>
+<a name="line4099">4099: </a>        u.u_error = 0;
+<a name="line4100">4100: </a>        u.u_dirp = <font color="#000000">"core"</font>;
+<a name="line4101">4101: </a>        ip = namei(&amp;schar, 1);
+<a name="line4102">4102: </a>        <font color="#000000">if</font>(ip == NULL) {
+<a name="line4103">4103: </a>                <font color="#000000">if</font>(u.u_error)
+<a name="line4104">4104: </a>                        <font color="#000000">return</font>(0);
+<a name="line4105">4105: </a>                ip = maknode(0666);
+<a name="line4106">4106: </a>                <font color="#000000">if</font>(ip == NULL)
+<a name="line4107">4107: </a>                        <font color="#000000">return</font>(0);
+<a name="line4108">4108: </a>        }
+<a name="line4109">4109: </a>        <font color="#000000">if</font>(!access(ip, IWRITE) &amp;&amp;
+<a name="line4110">4110: </a>           (ip-&gt;i_mode&amp;IFMT) == 0 &amp;&amp;
+<a name="line4111">4111: </a>           u.u_uid == u.u_ruid) {
+<a name="line4112">4112: </a>                itrunc(ip);
+<a name="line4113">4113: </a>                u.u_offset[0] = 0;
+<a name="line4114">4114: </a>                u.u_offset[1] = 0;
+<a name="line4115">4115: </a>                u.u_base = &amp;u;
+<a name="line4116">4116: </a>                u.u_count = USIZE*64;
+<a name="line4117">4117: </a>                u.u_segflg = 1;
+<a name="line4118">4118: </a>                writei(ip);
+<a name="line4119">4119: </a>                s = u.u_procp-&gt;p_size - USIZE;
+<a name="line4120">4120: </a>                estabur(0, s, 0, 0);
+<a name="line4121">4121: </a>                u.u_base = 0;
+<a name="line4122">4122: </a>                u.u_count = s*64;
+<a name="line4123">4123: </a>                u.u_segflg = 0;
+<a name="line4124">4124: </a>                writei(ip);
+<a name="line4125">4125: </a>        }
+<a name="line4126">4126: </a>        iput(ip);
+<a name="line4127">4127: </a>        <font color="#000000">return</font>(u.u_error==0);
+<a name="line4128">4128: </a>}
+<a name="line4129">4129: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4130">4130: </a>
+<a name="line4131">4131: </a><font color="#800000">/*</font>
+<a name="line4132">4132: </a><font color="#800000"> * grow the stack to include the SP</font>
+<a name="line4133">4133: </a><font color="#800000"> * true return if successful.</font>
+<a name="line4134">4134: </a><font color="#800000"> */</font>
+<a name="line4135">4135: </a>
+<a name="line4136">4136: </a><font color="#000000"><a name="row"></a>grow(sp)</font>
+<a name="line4137">4137: </a>char *sp;
+<a name="line4138">4138: </a>{
+<a name="line4139">4139: </a>        register a, si, i;
+<a name="line4140">4140: </a>
+<a name="line4141">4141: </a>        <font color="#000000">if</font>(sp &gt;= -u.u_ssize*64)
+<a name="line4142">4142: </a>                <font color="#000000">return</font>(0);
+<a name="line4143">4143: </a>        si = ldiv(-sp, 64) - u.u_ssize + SINCR;
+<a name="line4144">4144: </a>        <font color="#000000">if</font>(si &lt;= 0)
+<a name="line4145">4145: </a>                <font color="#000000">return</font>(0);
+<a name="line4146">4146: </a>        <font color="#000000">if</font>(estabur(u.u_tsize, u.u_dsize, u.u_ssize+si, u.u_sep))
+<a name="line4147">4147: </a>                <font color="#000000">return</font>(0);
+<a name="line4148">4148: </a>        expand(u.u_procp-&gt;p_size+si);
+<a name="line4149">4149: </a>        a = u.u_procp-&gt;p_addr + u.u_procp-&gt;p_size;
+<a name="line4150">4150: </a>        <font color="#000000">for</font>(i=u.u_ssize; i; i--) {
+<a name="line4151">4151: </a>                a--;
+<a name="line4152">4152: </a>                copyseg(a-si, a);
+<a name="line4153">4153: </a>        }
+<a name="line4154">4154: </a>        <font color="#000000">for</font>(i=si; i; i--)
+<a name="line4155">4155: </a>                clearseg(--a);
+<a name="line4156">4156: </a>        u.u_ssize =+ si;
+<a name="line4157">4157: </a>        <font color="#000000">return</font>(1);
+<a name="line4158">4158: </a>}
+<a name="line4159">4159: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4160">4160: </a>
+<a name="line4161">4161: </a><font color="#800000">/*</font>
+<a name="line4162">4162: </a><font color="#800000"> * sys-trace system call.</font>
+<a name="line4163">4163: </a><font color="#800000"> */</font>
+<a name="line4164">4164: </a><font color="#000000"><a name="trace"></a>ptrace()</font>
+<a name="line4165">4165: </a>{
+<a name="line4166">4166: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line4167">4167: </a>
+<a name="line4168">4168: </a>        <font color="#000000">if</font> (u.u_arg[2] &lt;= 0) {
+<a name="line4169">4169: </a>                u.u_procp-&gt;p_flag =| STRC;
+<a name="line4170">4170: </a>                <font color="#000000">return</font>;
+<a name="line4171">4171: </a>        }
+<a name="line4172">4172: </a>        <font color="#000000">for</font> (p=proc; p &lt; &amp;proc[NPROC]; p++) 
+<a name="line4173">4173: </a>                <font color="#000000">if</font> (p-&gt;p_stat==SSTOP
+<a name="line4174">4174: </a>                 &amp;&amp; p-&gt;p_pid==u.u_arg[0]
+<a name="line4175">4175: </a>                 &amp;&amp; p-&gt;p_ppid==u.u_procp-&gt;p_pid)
+<a name="line4176">4176: </a>                        <font color="#000000">goto</font> found;
+<a name="line4177">4177: </a>        u.u_error = ESRCH;
+<a name="line4178">4178: </a>        <font color="#000000">return</font>;
+<a name="line4179">4179: </a>
+<a name="line4180">4180: </a><font color="#000000">    found:</font>
+<a name="line4181">4181: </a>        <font color="#000000">while</font> (ipc.ip_lock)
+<a name="line4182">4182: </a>                sleep(&amp;ipc, IPCPRI);
+<a name="line4183">4183: </a>        ipc.ip_lock = p-&gt;p_pid;
+<a name="line4184">4184: </a>        ipc.ip_data = u.u_ar0[R0];
+<a name="line4185">4185: </a>        ipc.ip_addr = u.u_arg[1] &amp; ~01;
+<a name="line4186">4186: </a>        ipc.ip_req = u.u_arg[2];
+<a name="line4187">4187: </a>        p-&gt;p_flag =&amp; ~SWTED;
+<a name="line4188">4188: </a>        setrun(p);
+<a name="line4189">4189: </a>        <font color="#000000">while</font> (ipc.ip_req &gt; 0)
+<a name="line4190">4190: </a>                sleep(&amp;ipc, IPCPRI);
+<a name="line4191">4191: </a>        u.u_ar0[R0] = ipc.ip_data;
+<a name="line4192">4192: </a>        <font color="#000000">if</font> (ipc.ip_req &lt; 0)
+<a name="line4193">4193: </a>                u.u_error = EIO;
+<a name="line4194">4194: </a>        ipc.ip_lock = 0;
+<a name="line4195">4195: </a>        wakeup(&amp;ipc);
+<a name="line4196">4196: </a>}
+<a name="line4197">4197: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4198">4198: </a>
+<a name="line4199">4199: </a><font color="#800000">/*</font>
+<a name="line4200">4200: </a><font color="#800000"> * Code that the child process</font>
+<a name="line4201">4201: </a><font color="#800000"> * executes to implement the command</font>
+<a name="line4202">4202: </a><font color="#800000"> * of the parent process in tracing.</font>
+<a name="line4203">4203: </a><font color="#800000"> */</font>
+<a name="line4204">4204: </a><font color="#000000"><a name="rocxmt"></a>procxmt()</font>
+<a name="line4205">4205: </a>{
+<a name="line4206">4206: </a>        register int i;
+<a name="line4207">4207: </a>        register int *p;
+<a name="line4208">4208: </a>
+<a name="line4209">4209: </a>        <font color="#000000">if</font> (ipc.ip_lock != u.u_procp-&gt;p_pid)
+<a name="line4210">4210: </a>                <font color="#000000">return</font>(0);
+<a name="line4211">4211: </a>        i = ipc.ip_req;
+<a name="line4212">4212: </a>        ipc.ip_req = 0;
+<a name="line4213">4213: </a>        wakeup(&amp;ipc);
+<a name="line4214">4214: </a>        <font color="#000000">switch</font> (i) {
+<a name="line4215">4215: </a>
+<a name="line4216">4216: </a>        <font color="#800000">/* read user I */</font>
+<a name="line4217">4217: </a>        <font color="#000000">case</font> 1:
+<a name="line4218">4218: </a>                <font color="#000000">if</font> (fuibyte(ipc.ip_addr) == -1)
+<a name="line4219">4219: </a>                        <font color="#000000">goto</font> error;
+<a name="line4220">4220: </a>                ipc.ip_data = fuiword(ipc.ip_addr);
+<a name="line4221">4221: </a>                <font color="#000000">break</font>;
+<a name="line4222">4222: </a>
+<a name="line4223">4223: </a>        <font color="#800000">/* read user D */</font>
+<a name="line4224">4224: </a>        <font color="#000000">case</font> 2:
+<a name="line4225">4225: </a>                <font color="#000000">if</font> (fubyte(ipc.ip_addr) == -1)
+<a name="line4226">4226: </a>                        <font color="#000000">goto</font> error;
+<a name="line4227">4227: </a>                ipc.ip_data = fuword(ipc.ip_addr);
+<a name="line4228">4228: </a>                <font color="#000000">break</font>;
+<a name="line4229">4229: </a>
+<a name="line4230">4230: </a>        <font color="#800000">/* read u */</font>
+<a name="line4231">4231: </a>        <font color="#000000">case</font> 3:
+<a name="line4232">4232: </a>                i = ipc.ip_addr;
+<a name="line4233">4233: </a>                <font color="#000000">if</font> (i&lt;0 || i &gt;= (USIZE&lt;&lt;6))
+<a name="line4234">4234: </a>                        <font color="#000000">goto</font> error;
+<a name="line4235">4235: </a>                ipc.ip_data = u.inta[i&gt;&gt;1];
+<a name="line4236">4236: </a>                <font color="#000000">break</font>;
+<a name="line4237">4237: </a>
+<a name="line4238">4238: </a>        <font color="#800000">/* write user I (for now, always an error) */</font>
+<a name="line4239">4239: </a>        <font color="#000000">case</font> 4:
+<a name="line4240">4240: </a>                <font color="#000000">if</font> (suiword(ipc.ip_addr, 0) &lt; 0)
+<a name="line4241">4241: </a>                        <font color="#000000">goto</font> error;
+<a name="line4242">4242: </a>                suiword(ipc.ip_addr, ipc.ip_data);
+<a name="line4243">4243: </a>                <font color="#000000">break</font>;
+<a name="line4244">4244: </a>
+<a name="line4245">4245: </a>        <font color="#800000">/* write user D */</font>
+<a name="line4246">4246: </a>        <font color="#000000">case</font> 5:
+<a name="line4247">4247: </a>                <font color="#000000">if</font> (suword(ipc.ip_addr, 0) &lt; 0)
+<a name="line4248">4248: </a>                        <font color="#000000">goto</font> error;
+<a name="line4249">4249: </a>                suword(ipc.ip_addr, ipc.ip_data);
+<a name="line4250">4250: </a>                <font color="#000000">break</font>;
+<a name="line4251">4251: </a>
+<a name="line4252">4252: </a>        <font color="#800000">/* write u */</font>
+<a name="line4253">4253: </a>        <font color="#000000">case</font> 6:
+<a name="line4254">4254: </a>                p = &amp;u.inta[ipc.ip_addr&gt;&gt;1];
+<a name="line4255">4255: </a>                <font color="#000000">if</font> (p &gt;= u.u_fsav &amp;&amp; p &lt; &amp;u.u_fsav[25])
+<a name="line4256">4256: </a>                        <font color="#000000">goto</font> ok;
+<a name="line4257">4257: </a>                <font color="#000000">for</font> (i=0; i&lt;9; i++)
+<a name="line4258">4258: </a>                        <font color="#000000">if</font> (p == &amp;u.u_ar0[regloc[i]])
+<a name="line4259">4259: </a>                                <font color="#000000">goto</font> ok;
+<a name="line4260">4260: </a>                <font color="#000000">goto</font> error;
+<a name="line4261">4261: </a><font color="#000000">        ok:</font>
+<a name="line4262">4262: </a>                <font color="#000000">if</font> (p == &amp;u.u_ar0[RPS]) {
+<a name="line4263">4263: </a>
+<a name="line4264">4264: </a>                        ipc.ip_data =| 0170000; <font color="#800000">/* assure user space */</font>
+<a name="line4265">4265: </a>
+<a name="line4266">4266: </a>                        ipc.ip_data =&amp; ~0340;   <font color="#800000">/* priority 0 */</font>
+<a name="line4267">4267: </a>                }
+<a name="line4268">4268: </a>                *p = ipc.ip_data;
+<a name="line4269">4269: </a>                <font color="#000000">break</font>;
+<a name="line4270">4270: </a>
+<a name="line4271">4271: </a>        <font color="#800000">/* set signal and continue */</font>
+<a name="line4272">4272: </a>        <font color="#000000">case</font> 7:
+<a name="line4273">4273: </a>                u.u_procp-&gt;p_sig = ipc.ip_data;
+<a name="line4274">4274: </a>                <font color="#000000">return</font>(1);
+<a name="line4275">4275: </a>
+<a name="line4276">4276: </a>        <font color="#800000">/* force exit */</font>
+<a name="line4277">4277: </a>        <font color="#000000">case</font> 8:
+<a name="line4278">4278: </a>                exit();
+<a name="line4279">4279: </a>
+<a name="line4280">4280: </a><font color="#000000">        default:</font>
+<a name="line4281">4281: </a><font color="#000000">        error:</font>
+<a name="line4282">4282: </a>                ipc.ip_req = -1;
+<a name="line4283">4283: </a>        }
+<a name="line4284">4284: </a>        <font color="#000000">return</font>(0);
+<a name="line4285">4285: </a>}
+<a name="line4286">4286: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

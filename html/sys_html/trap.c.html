@@ -1,0 +1,231 @@
+
+<html>
+<head>
+<title>trap.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line2650">2650: </a><font color="#000000">#</font>
+<a name="line2651">2651: </a><font color="#000000">#include "../param.h"</font>
+<a name="line2652">2652: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line2653">2653: </a><font color="#000000">#include "../user.h"</font>
+<a name="line2654">2654: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line2655">2655: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line2656">2656: </a><font color="#000000">#include "../seg.h"</font>
+<a name="line2657">2657: </a>
+<a name="line2658">2658: </a><font color="#000000">#define EBIT    1               </font><font color="#800000">/* user error bit in PS: C-bit */</font><font color="#000000"></font>
+<a name="line2659">2659: </a><font color="#000000">#define UMODE   0170000         </font><font color="#800000">/* user-mode bits in PS word */</font><font color="#000000"></font>
+<a name="line2660">2660: </a><font color="#000000">#define SETD    0170011         </font><font color="#800000">/* SETD instruction */</font><font color="#000000"></font>
+<a name="line2661">2661: </a><font color="#000000">#define SYS     0104400         </font><font color="#800000">/* sys (trap) instruction */</font><font color="#000000"></font>
+<a name="line2662">2662: </a><font color="#000000">#define USER    020             </font><font color="#800000">/* user-mode flag added to dev */</font><font color="#000000"></font>
+<a name="line2663">2663: </a>
+<a name="line2664">2664: </a><font color="#800000">/*</font>
+<a name="line2665">2665: </a><font color="#800000"> * structure of the system entry table (sysent.c)</font>
+<a name="line2666">2666: </a><font color="#800000"> */</font>
+<a name="line2667">2667: </a><font color="#000000"><a name="sysent"></a>struct sysent   </font>{
+<a name="line2668">2668: </a>        int     count;          <font color="#800000">/* argument count */</font>
+<a name="line2669">2669: </a>        int     (*call)();      <font color="#800000">/* name of handler */</font>
+<a name="line2670">2670: </a>} sysent[64];
+<a name="line2671">2671: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2672">2672: </a>
+<a name="line2673">2673: </a><font color="#800000">/*</font>
+<a name="line2674">2674: </a><font color="#800000"> * Offsets of the user's registers relative to</font>
+<a name="line2675">2675: </a><font color="#800000"> * the saved r0. See reg.h</font>
+<a name="line2676">2676: </a><font color="#800000"> */</font>
+<a name="line2677">2677: </a>char    regloc[9]
+<a name="line2678">2678: </a>{
+<a name="line2679">2679: </a>        R0, R1, R2, R3, R4, R5, R6, R7, RPS
+<a name="line2680">2680: </a>};
+<a name="line2681">2681: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2682">2682: </a>
+<a name="line2683">2683: </a><font color="#800000">/*</font>
+<a name="line2684">2684: </a><font color="#800000"> * Called from l40.s or l45.s when a processor trap occurs.</font>
+<a name="line2685">2685: </a><font color="#800000"> * The arguments are the words saved on the system stack</font>
+<a name="line2686">2686: </a><font color="#800000"> * by the hardware and software during the trap processing.</font>
+<a name="line2687">2687: </a><font color="#800000"> * Their order is dictated by the hardware and the details</font>
+<a name="line2688">2688: </a><font color="#800000"> * of C's calling sequence. They are peculiar in that</font>
+<a name="line2689">2689: </a><font color="#800000"> * this call is not 'by value' and changed user registers</font>
+<a name="line2690">2690: </a><font color="#800000"> * get copied back on return.</font>
+<a name="line2691">2691: </a><font color="#800000"> * dev is the kind of trap that occurred.</font>
+<a name="line2692">2692: </a><font color="#800000"> */</font>
+<a name="line2693">2693: </a><font color="#000000"><a name="rap"></a>trap(dev, sp, r1, nps, r0, pc, ps)</font>
+<a name="line2694">2694: </a>{
+<a name="line2695">2695: </a>        register i, a;
+<a name="line2696">2696: </a>        register <font color="#000000">struct sysent</font> *callp;
+<a name="line2697">2697: </a>
+<a name="line2698">2698: </a>        savfp();
+<a name="line2699">2699: </a>        <font color="#000000">if</font> ((ps&amp;UMODE) == UMODE)
+<a name="line2700">2700: </a>                dev =| USER;
+<a name="line2701">2701: </a>        u.u_ar0 = &amp;r0;
+<a name="line2702">2702: </a>        <font color="#000000">switch</font>(dev) {
+<a name="line2703">2703: </a>
+<a name="line2704">2704: </a>        <font color="#800000">/*</font>
+<a name="line2705">2705: </a><font color="#800000">         * Trap not expected.</font>
+<a name="line2706">2706: </a><font color="#800000">         * Usually a kernel mode bus error.</font>
+<a name="line2707">2707: </a><font color="#800000">         * The numbers printed are used to</font>
+<a name="line2708">2708: </a><font color="#800000">         * find the hardware PS/PC as follows.</font>
+<a name="line2709">2709: </a><font color="#800000">         * (all numbers in octal 18 bits)</font>
+<a name="line2710">2710: </a><font color="#800000">         *      address_of_saved_ps =</font>
+<a name="line2711">2711: </a><font color="#800000">         *              (ka6*0100) + aps - 0140000;</font>
+<a name="line2712">2712: </a><font color="#800000">         *      address_of_saved_pc =</font>
+<a name="line2713">2713: </a><font color="#800000">         *              address_of_saved_ps - 2;</font>
+<a name="line2714">2714: </a><font color="#800000">         */</font>
+<a name="line2715">2715: </a><font color="#000000">        default:</font>
+<a name="line2716">2716: </a>                printf(<font color="#000000">"ka6 = %o\n"</font>, *ka6);
+<a name="line2717">2717: </a>                printf(<font color="#000000">"aps = %o\n"</font>, &amp;ps);
+<a name="line2718">2718: </a>                printf(<font color="#000000">"trap type %o\n"</font>, dev);
+<a name="line2719">2719: </a>                panic(<font color="#000000">"trap"</font>);
+<a name="line2720">2720: </a>
+<a name="line2721">2721: </a>        <font color="#000000">case</font> 0+USER: <font color="#800000">/* bus error */</font>
+<a name="line2722">2722: </a>                i = SIGBUS;
+<a name="line2723">2723: </a>                <font color="#000000">break</font>;
+<a name="line2724">2724: </a>
+<a name="line2725">2725: </a>        <font color="#800000">/*</font>
+<a name="line2726">2726: </a><font color="#800000">         * If illegal instructions are not</font>
+<a name="line2727">2727: </a><font color="#800000">         * being caught and the offending instruction</font>
+<a name="line2728">2728: </a><font color="#800000">         * is a SETD, the trap is ignored.</font>
+<a name="line2729">2729: </a><font color="#800000">         * This is because C produces a SETD at</font>
+<a name="line2730">2730: </a><font color="#800000">         * the beginning of every program which</font>
+<a name="line2731">2731: </a><font color="#800000">         * will trap on CPUs without 11/45 FPU.</font>
+<a name="line2732">2732: </a><font color="#800000">         */</font>
+<a name="line2733">2733: </a>        <font color="#000000">case</font> 1+USER: <font color="#800000">/* illegal instruction */</font>
+<a name="line2734">2734: </a>                <font color="#000000">if</font>(fuiword(pc-2) == SETD &amp;&amp; u.u_signal[SIGINS] == 0)
+<a name="line2735">2735: </a>                        <font color="#000000">goto</font> out;
+<a name="line2736">2736: </a>                i = SIGINS;
+<a name="line2737">2737: </a>                <font color="#000000">break</font>;
+<a name="line2738">2738: </a>
+<a name="line2739">2739: </a>        <font color="#000000">case</font> 2+USER: <font color="#800000">/* bpt or trace */</font>
+<a name="line2740">2740: </a>                i = SIGTRC;
+<a name="line2741">2741: </a>                <font color="#000000">break</font>;
+<a name="line2742">2742: </a>
+<a name="line2743">2743: </a>        <font color="#000000">case</font> 3+USER: <font color="#800000">/* iot */</font>
+<a name="line2744">2744: </a>                i = SIGIOT;
+<a name="line2745">2745: </a>                <font color="#000000">break</font>;
+<a name="line2746">2746: </a>
+<a name="line2747">2747: </a>        <font color="#000000">case</font> 5+USER: <font color="#800000">/* emt */</font>
+<a name="line2748">2748: </a>                i = SIGEMT;
+<a name="line2749">2749: </a>                <font color="#000000">break</font>;
+<a name="line2750">2750: </a>
+<a name="line2751">2751: </a>        <font color="#000000">case</font> 6+USER: <font color="#800000">/* sys call */</font>
+<a name="line2752">2752: </a>                u.u_error = 0;
+<a name="line2753">2753: </a>                ps =&amp; ~EBIT;
+<a name="line2754">2754: </a>                callp = &amp;sysent[fuiword(pc-2)&amp;077];
+<a name="line2755">2755: </a>                <font color="#000000">if</font> (callp == sysent) { <font color="#800000">/* indirect */</font>
+<a name="line2756">2756: </a>                        a = fuiword(pc);
+<a name="line2757">2757: </a>                        pc =+ 2;
+<a name="line2758">2758: </a>                        i = fuword(a);
+<a name="line2759">2759: </a>                        <font color="#000000">if</font> ((i &amp; ~077) != SYS)
+<a name="line2760">2760: </a>                                i = 077;        <font color="#800000">/* illegal */</font>
+<a name="line2761">2761: </a>                        callp = &amp;sysent[i&amp;077];
+<a name="line2762">2762: </a>                        <font color="#000000">for</font>(i=0; i&lt;callp-&gt;count; i++)
+<a name="line2763">2763: </a>                                u.u_arg[i] = fuword(a =+ 2);
+<a name="line2764">2764: </a>                } <font color="#000000">else</font> {
+<a name="line2765">2765: </a>                        <font color="#000000">for</font>(i=0; i&lt;callp-&gt;count; i++) {
+<a name="line2766">2766: </a>                                u.u_arg[i] = fuiword(pc);
+<a name="line2767">2767: </a>                                pc =+ 2;
+<a name="line2768">2768: </a>                        }
+<a name="line2769">2769: </a>                }
+<a name="line2770">2770: </a>                u.u_dirp = u.u_arg[0];
+<a name="line2771">2771: </a>                trap1(callp-&gt;call);
+<a name="line2772">2772: </a>                <font color="#000000">if</font>(u.u_intflg)
+<a name="line2773">2773: </a>                        u.u_error = EINTR;
+<a name="line2774">2774: </a>                <font color="#000000">if</font>(u.u_error &lt; 100) {
+<a name="line2775">2775: </a>                        <font color="#000000">if</font>(u.u_error) {
+<a name="line2776">2776: </a>                                ps =| EBIT;
+<a name="line2777">2777: </a>                                r0 = u.u_error;
+<a name="line2778">2778: </a>                        }
+<a name="line2779">2779: </a>                        <font color="#000000">goto</font> out;
+<a name="line2780">2780: </a>                }
+<a name="line2781">2781: </a>                i = SIGSYS;
+<a name="line2782">2782: </a>                <font color="#000000">break</font>;
+<a name="line2783">2783: </a>
+<a name="line2784">2784: </a>        <font color="#800000">/*</font>
+<a name="line2785">2785: </a><font color="#800000">         * Since the floating exception is an</font>
+<a name="line2786">2786: </a><font color="#800000">         * imprecise trap, a user generated</font>
+<a name="line2787">2787: </a><font color="#800000">         * trap may actually come from kernel</font>
+<a name="line2788">2788: </a><font color="#800000">         * mode. In this case, a signal is sent</font>
+<a name="line2789">2789: </a><font color="#800000">         * to the current process to be picked</font>
+<a name="line2790">2790: </a><font color="#800000">         * up later.</font>
+<a name="line2791">2791: </a><font color="#800000">         */</font>
+<a name="line2792">2792: </a>        <font color="#000000">case</font> 8: <font color="#800000">/* floating exception */</font>
+<a name="line2793">2793: </a>                psignal(u.u_procp, SIGFPT);
+<a name="line2794">2794: </a>                <font color="#000000">return</font>;
+<a name="line2795">2795: </a>
+<a name="line2796">2796: </a>        <font color="#000000">case</font> 8+USER:
+<a name="line2797">2797: </a>                i = SIGFPT;
+<a name="line2798">2798: </a>                <font color="#000000">break</font>;
+<a name="line2799">2799: </a>
+<a name="line2800">2800: </a>        <font color="#800000">/*</font>
+<a name="line2801">2801: </a><font color="#800000">         * If the user SP is below the stack segment,</font>
+<a name="line2802">2802: </a><font color="#800000">         * grow the stack automatically.</font>
+<a name="line2803">2803: </a><font color="#800000">         * This relies on the ability of the hardware</font>
+<a name="line2804">2804: </a><font color="#800000">         * to restart a half executed instruction.</font>
+<a name="line2805">2805: </a><font color="#800000">         * On the 11/40 this is not the case and</font>
+<a name="line2806">2806: </a><font color="#800000">         * the routine backup/l40.s may fail.</font>
+<a name="line2807">2807: </a><font color="#800000">         * The classic example is on the instruction</font>
+<a name="line2808">2808: </a><font color="#800000">         *      cmp     -(sp),-(sp)</font>
+<a name="line2809">2809: </a><font color="#800000">         */</font>
+<a name="line2810">2810: </a>        <font color="#000000">case</font> 9+USER: <font color="#800000">/* segmentation exception */</font>
+<a name="line2811">2811: </a>                a = sp;
+<a name="line2812">2812: </a>                <font color="#000000">if</font>(backup(u.u_ar0) == 0)
+<a name="line2813">2813: </a>                <font color="#000000">if</font>(grow(a))
+<a name="line2814">2814: </a>                        <font color="#000000">goto</font> out;
+<a name="line2815">2815: </a>                i = SIGSEG;
+<a name="line2816">2816: </a>                <font color="#000000">break</font>;
+<a name="line2817">2817: </a>        }
+<a name="line2818">2818: </a>        psignal(u.u_procp, i);
+<a name="line2819">2819: </a>
+<a name="line2820">2820: </a><font color="#000000">out:</font>
+<a name="line2821">2821: </a>        <font color="#000000">if</font>(issig())
+<a name="line2822">2822: </a>                psig();
+<a name="line2823">2823: </a>        setpri(u.u_procp);
+<a name="line2824">2824: </a>}
+<a name="line2825">2825: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2826">2826: </a>
+<a name="line2827">2827: </a><font color="#800000">/*</font>
+<a name="line2828">2828: </a><font color="#800000"> * Call the system-entry routine f (out of the</font>
+<a name="line2829">2829: </a><font color="#800000"> * sysent table). This is a subroutine for trap, and</font>
+<a name="line2830">2830: </a><font color="#800000"> * not in-line, because if a signal occurs</font>
+<a name="line2831">2831: </a><font color="#800000"> * during processing, an (abnormal) return is simulated from</font>
+<a name="line2832">2832: </a><font color="#800000"> * the last caller to savu(qsav); if this took place</font>
+<a name="line2833">2833: </a><font color="#800000"> * inside of trap, it wouldn't have a chance to clean up.</font>
+<a name="line2834">2834: </a><font color="#800000"> *</font>
+<a name="line2835">2835: </a><font color="#800000"> * If this occurs, the return takes place without</font>
+<a name="line2836">2836: </a><font color="#800000"> * clearing u_intflg; if it's still set, trap</font>
+<a name="line2837">2837: </a><font color="#800000"> * marks an error which means that a system</font>
+<a name="line2838">2838: </a><font color="#800000"> * call (like read on a typewriter) got interrupted</font>
+<a name="line2839">2839: </a><font color="#800000"> * by a signal.</font>
+<a name="line2840">2840: </a><font color="#800000"> */</font>
+<a name="line2841">2841: </a><font color="#000000">trap1(f)</font>
+<a name="line2842">2842: </a><font color="#000000">int (*f)()</font>;
+<a name="line2843">2843: </a>{
+<a name="line2844">2844: </a>
+<a name="line2845">2845: </a>        u.u_intflg = 1;
+<a name="line2846">2846: </a>        savu(u.u_qsav);
+<a name="line2847">2847: </a>        (*f)();
+<a name="line2848">2848: </a>        u.u_intflg = 0;
+<a name="line2849">2849: </a>}
+<a name="line2850">2850: </a>
+<a name="line2851">2851: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2852">2852: </a><font color="#800000">/*</font>
+<a name="line2853">2853: </a><font color="#800000"> * nonexistent system call-- set fatal error code.</font>
+<a name="line2854">2854: </a><font color="#800000"> */</font>
+<a name="line2855">2855: </a><font color="#000000"><a name="osys"></a>nosys()</font>
+<a name="line2856">2856: </a>{
+<a name="line2857">2857: </a>        u.u_error = 100;
+<a name="line2858">2858: </a>}
+<a name="line2859">2859: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2860">2860: </a>
+<a name="line2861">2861: </a><font color="#800000">/*</font>
+<a name="line2862">2862: </a><font color="#800000"> * Ignored system call</font>
+<a name="line2863">2863: </a><font color="#800000"> */</font>
+<a name="line2864">2864: </a><font color="#000000"><a name="ullsys"></a>nullsys()</font>
+<a name="line2865">2865: </a>{
+<a name="line2866">2866: </a>}
+<a name="line2867">2867: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

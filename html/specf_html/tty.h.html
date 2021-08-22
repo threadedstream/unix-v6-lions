@@ -1,0 +1,107 @@
+
+<html>
+<head>
+<title>tty.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line7900">7900: </a><font color="#800000">/*</font>
+<a name="line7901">7901: </a><font color="#800000"> * A clist structure is the head</font>
+<a name="line7902">7902: </a><font color="#800000"> * of a linked list queue of characters.</font>
+<a name="line7903">7903: </a><font color="#800000"> * The characters are stored in 4-word</font>
+<a name="line7904">7904: </a><font color="#800000"> * blocks containing a link and 6 characters.</font>
+<a name="line7905">7905: </a><font color="#800000"> * The routines getc and putc (m45.s or m40.s)</font>
+<a name="line7906">7906: </a><font color="#800000"> * manipulate these structures.</font>
+<a name="line7907">7907: </a><font color="#800000"> */</font>
+<a name="line7908">7908: </a><font color="#000000"><a name="clist"></a>struct clist</font>
+<a name="line7909">7909: </a>{
+<a name="line7910">7910: </a>        int     c_cc;           <font color="#800000">/* character count */</font>
+<a name="line7911">7911: </a>        int     c_cf;           <font color="#800000">/* pointer to first block */</font>
+<a name="line7912">7912: </a>        int     c_cl;           <font color="#800000">/* pointer to last block */</font>
+<a name="line7913">7913: </a>};
+<a name="line7914">7914: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7915">7915: </a>
+<a name="line7916">7916: </a><font color="#800000">/*</font>
+<a name="line7917">7917: </a><font color="#800000"> * A tty structure is needed for</font>
+<a name="line7918">7918: </a><font color="#800000"> * each UNIX character device that</font>
+<a name="line7919">7919: </a><font color="#800000"> * is used for normal terminal IO.</font>
+<a name="line7920">7920: </a><font color="#800000"> * The routines in tty.c handle the</font>
+<a name="line7921">7921: </a><font color="#800000"> * common code associated with</font>
+<a name="line7922">7922: </a><font color="#800000"> * these structures.</font>
+<a name="line7923">7923: </a><font color="#800000"> * The definition and device dependent</font>
+<a name="line7924">7924: </a><font color="#800000"> * code is in each driver. (kl.c dc.c dh.c)</font>
+<a name="line7925">7925: </a><font color="#800000"> */</font>
+<a name="line7926">7926: </a><font color="#000000"><a name="tty"></a>struct tty</font>
+<a name="line7927">7927: </a>{
+<a name="line7928">7928: </a>        <font color="#000000">struct</font>  clist t_rawq;   <font color="#800000">/* input chars right off device */</font>
+<a name="line7929">7929: </a>        <font color="#000000">struct</font>  clist t_canq;   <font color="#800000">/* input chars after erase and kill */</font>
+<a name="line7930">7930: </a>        <font color="#000000">struct</font>  clist t_outq;   <font color="#800000">/* output list to device */</font>
+<a name="line7931">7931: </a>        int     t_flags;        <font color="#800000">/* mode, settable by stty call */</font>
+<a name="line7932">7932: </a>        int     *t_addr;        <font color="#800000">/* device address (register or startup fcn) */</font>
+<a name="line7933">7933: </a>
+<a name="line7934">7934: </a>        char    t_delct;        <font color="#800000">/* number of delimiters in raw q */</font>
+<a name="line7935">7935: </a>        char    t_col;          <font color="#800000">/* printing column of device */</font>
+<a name="line7936">7936: </a>        char    t_erase;        <font color="#800000">/* erase character */</font>
+<a name="line7937">7937: </a>        char    t_kill;         <font color="#800000">/* kill character */</font>
+<a name="line7938">7938: </a>        char    t_state;        <font color="#800000">/* internal state, not visible externally */</font>
+<a name="line7939">7939: </a>
+<a name="line7940">7940: </a>        char    t_char;         <font color="#800000">/* character temporary */</font>
+<a name="line7941">7941: </a>        int     t_speeds;       <font color="#800000">/* output+input line speed */</font>
+<a name="line7942">7942: </a>        int     t_dev;          <font color="#800000">/* device name */</font>
+<a name="line7943">7943: </a>};
+<a name="line7944">7944: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7945">7945: </a>
+<a name="line7946">7946: </a>
+<a name="line7947">7947: </a>char partab[];                  <font color="#800000">/* ASCII table: parity, character class */</font>
+<a name="line7948">7948: </a>
+<a name="line7949">7949: </a>
+<a name="line7950">7950: </a>
+<a name="line7951">7951: </a><font color="#000000">#define TTIPRI  10</font>
+<a name="line7952">7952: </a><font color="#000000">#define TTOPRI  20</font>
+<a name="line7953">7953: </a>
+<a name="line7954">7954: </a><font color="#000000">#define CERASE  '#'             </font><font color="#800000">/* default special characters */</font><font color="#000000"></font>
+<a name="line7955">7955: </a><font color="#000000">#define CEOT    004</font>
+<a name="line7956">7956: </a><font color="#000000">#define CKILL   '@'</font>
+<a name="line7957">7957: </a><font color="#000000">#define CQUIT   034             </font><font color="#800000">/* FS, cntl shift L */</font><font color="#000000"></font>
+<a name="line7958">7958: </a><font color="#000000">#define CINTR   0177            </font><font color="#800000">/* DEL */</font><font color="#000000"></font>
+<a name="line7959">7959: </a>
+<a name="line7960">7960: </a><font color="#800000">/* limits */</font>
+<a name="line7961">7961: </a><font color="#000000">#define TTHIWAT 50</font>
+<a name="line7962">7962: </a><font color="#000000">#define TTLOWAT 30</font>
+<a name="line7963">7963: </a><font color="#000000">#define TTYHOG  256</font>
+<a name="line7964">7964: </a>
+<a name="line7965">7965: </a><font color="#800000">/* modes */</font>
+<a name="line7966">7966: </a><font color="#000000">#define HUPCL   01</font>
+<a name="line7967">7967: </a><font color="#000000">#define XTABS   02</font>
+<a name="line7968">7968: </a><font color="#000000">#define LCASE   04</font>
+<a name="line7969">7969: </a><font color="#000000">#define ECHO    010</font>
+<a name="line7970">7970: </a><font color="#000000">#define CRMOD   020</font>
+<a name="line7971">7971: </a><font color="#000000">#define RAW     040</font>
+<a name="line7972">7972: </a><font color="#000000">#define ODDP    0100</font>
+<a name="line7973">7973: </a><font color="#000000">#define EVENP   0200</font>
+<a name="line7974">7974: </a><font color="#000000">#define NLDELAY 001400</font>
+<a name="line7975">7975: </a><font color="#000000">#define TBDELAY 006000</font>
+<a name="line7976">7976: </a><font color="#000000">#define CRDELAY 030000</font>
+<a name="line7977">7977: </a><font color="#000000">#define VTDELAY 040000</font>
+<a name="line7978">7978: </a>
+<a name="line7979">7979: </a><font color="#800000">/* Hardware bits */</font>
+<a name="line7980">7980: </a><font color="#000000">#define DONE    0200</font>
+<a name="line7981">7981: </a><font color="#000000">#define IENABLE 0100</font>
+<a name="line7982">7982: </a>
+<a name="line7983">7983: </a><font color="#800000">/* Internal state bits */</font>
+<a name="line7984">7984: </a><font color="#000000">#define TIMEOUT 01              </font><font color="#800000">/* Delay timeout in progress */</font><font color="#000000"></font>
+<a name="line7985">7985: </a><font color="#000000">#define WOPEN   02              </font><font color="#800000">/* Waiting for open to complete */</font><font color="#000000"></font>
+<a name="line7986">7986: </a>
+<a name="line7987">7987: </a><font color="#000000">#define ISOPEN  04              </font><font color="#800000">/* Device is open */</font><font color="#000000"></font>
+<a name="line7988">7988: </a><font color="#000000">#define SSTART  010             </font><font color="#800000">/* Has special start routine at addr */</font><font color="#000000"></font>
+<a name="line7989">7989: </a>
+<a name="line7990">7990: </a><font color="#000000">#define CARR_ON 020             </font><font color="#800000">/* Software copy of carrier-present */</font><font color="#000000"></font>
+<a name="line7991">7991: </a>
+<a name="line7992">7992: </a><font color="#000000">#define BUSY    040             </font><font color="#800000">/* Output in progress */</font><font color="#000000"></font>
+<a name="line7993">7993: </a><font color="#000000">#define ASLEEP  0100            </font><font color="#800000">/* Wakeup when output done */</font><font color="#000000"></font>
+</pre>
+</body>
+
+</html>

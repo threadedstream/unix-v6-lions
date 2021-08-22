@@ -1,0 +1,99 @@
+
+<html>
+<head>
+<title>buf.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4500">4500: </a><font color="#800000">/*</font>
+<a name="line4501">4501: </a><font color="#800000"> * Each buffer in the pool is usually doubly linked into 2 lists:</font>
+<a name="line4502">4502: </a><font color="#800000"> * the device with which it is currently associated (always)</font>
+<a name="line4503">4503: </a><font color="#800000"> * and also on a list of blocks available for allocation</font>
+<a name="line4504">4504: </a><font color="#800000"> * for other use (usually).</font>
+<a name="line4505">4505: </a><font color="#800000"> * The latter list is kept in last-used order, and the two</font>
+<a name="line4506">4506: </a><font color="#800000"> * lists are doubly linked to make it easy to remove</font>
+<a name="line4507">4507: </a><font color="#800000"> * a buffer from one list when it was found by</font>
+<a name="line4508">4508: </a><font color="#800000"> * looking through the other.</font>
+<a name="line4509">4509: </a><font color="#800000"> * A buffer is on the available list, and is liable</font>
+<a name="line4510">4510: </a><font color="#800000"> * to be reassigned to another disk block, if and only</font>
+<a name="line4511">4511: </a><font color="#800000"> * if it is not marked BUSY.  When a buffer is busy, the</font>
+<a name="line4512">4512: </a><font color="#800000"> * available-list pointers can be used for other purposes.</font>
+<a name="line4513">4513: </a><font color="#800000"> * Most drivers use the forward ptr as a link in their I/O</font>
+<a name="line4514">4514: </a><font color="#800000"> * active queue.</font>
+<a name="line4515">4515: </a><font color="#800000"> * A buffer header contains all the information required</font>
+<a name="line4516">4516: </a><font color="#800000"> * to perform I/O.</font>
+<a name="line4517">4517: </a><font color="#800000"> * Most of the routines which manipulate these things</font>
+<a name="line4518">4518: </a><font color="#800000"> * are in bio.c.</font>
+<a name="line4519">4519: </a><font color="#800000"> */</font>
+<a name="line4520">4520: </a><font color="#000000"><a name="buf"></a>struct buf</font>
+<a name="line4521">4521: </a>{
+<a name="line4522">4522: </a>        int     b_flags;                <font color="#800000">/* see defines below */</font>
+<a name="line4523">4523: </a>        <font color="#000000">struct</font>  buf *b_forw;            <font color="#800000">/* headed by devtab of b_dev */</font>
+<a name="line4524">4524: </a>        <font color="#000000">struct</font>  buf *b_back;            <font color="#800000">/*  "  */</font>
+<a name="line4525">4525: </a>        <font color="#000000">struct</font>  buf *av_forw;           <font color="#800000">/* position on free list, */</font>
+<a name="line4526">4526: </a>        <font color="#000000">struct</font>  buf *av_back;           <font color="#800000">/*     if not BUSY*/</font>
+<a name="line4527">4527: </a>        int     b_dev;                  <font color="#800000">/* major+minor device name */</font>
+<a name="line4528">4528: </a>        int     b_wcount;               <font color="#800000">/* transfer count (usu. words) */</font>
+<a name="line4529">4529: </a>        char    *b_addr;                <font color="#800000">/* low order core address */</font>
+<a name="line4530">4530: </a>        char    *b_xmem;                <font color="#800000">/* high order core address */</font>
+<a name="line4531">4531: </a>        char    *b_blkno;               <font color="#800000">/* block # on device */</font>
+<a name="line4532">4532: </a>        char    b_error;                <font color="#800000">/* returned after I/O */</font>
+<a name="line4533">4533: </a>        char    *b_resid;               <font color="#800000">/* words not transferred after error */</font>
+<a name="line4534">4534: </a>
+<a name="line4535">4535: </a>} buf[NBUF];
+<a name="line4536">4536: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4537">4537: </a>
+<a name="line4538">4538: </a><font color="#800000">/*</font>
+<a name="line4539">4539: </a><font color="#800000"> * Each block device has a devtab, which contains private state stuff</font>
+<a name="line4540">4540: </a><font color="#800000"> * and 2 list heads: the b_forw/b_back list, which is doubly linked</font>
+<a name="line4541">4541: </a><font color="#800000"> * and has all the buffers currently associated with that major</font>
+<a name="line4542">4542: </a><font color="#800000"> * device; and the d_actf/d_actl list, which is private to the</font>
+<a name="line4543">4543: </a><font color="#800000"> * device but in fact is always used for the head and tail</font>
+<a name="line4544">4544: </a><font color="#800000"> * of the I/O queue for the device.</font>
+<a name="line4545">4545: </a><font color="#800000"> * Various routines in bio.c look at b_forw/b_back</font>
+<a name="line4546">4546: </a><font color="#800000"> * (notice they are the same as in the buf structure)</font>
+<a name="line4547">4547: </a><font color="#800000"> * but the rest is private to each device driver.</font>
+<a name="line4548">4548: </a><font color="#800000"> *</font>
+<a name="line4549">4549: </a><font color="#800000"> */</font>
+<a name="line4550">4550: </a>
+<a name="line4551">4551: </a><font color="#000000"><a name="devtab"></a>struct devtab</font>
+<a name="line4552">4552: </a>{
+<a name="line4553">4553: </a>        char    d_active;               <font color="#800000">/* busy flag */</font>
+<a name="line4554">4554: </a>        char    d_errcnt;               <font color="#800000">/* error count (for recovery) */</font>
+<a name="line4555">4555: </a>        <font color="#000000">struct</font>  buf *b_forw;            <font color="#800000">/* first buffer for this dev */</font>
+<a name="line4556">4556: </a>        <font color="#000000">struct</font>  buf *b_back;            <font color="#800000">/* last buffer for this dev */</font>
+<a name="line4557">4557: </a>        <font color="#000000">struct</font>  buf *d_actf;            <font color="#800000">/* head of I/O queue */</font>
+<a name="line4558">4558: </a>        <font color="#000000">struct</font>  buf *d_actl;            <font color="#800000">/* tail of I/O queue */</font>
+<a name="line4559">4559: </a>};
+<a name="line4560">4560: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4561">4561: </a>
+<a name="line4562">4562: </a><font color="#800000">/*</font>
+<a name="line4563">4563: </a><font color="#800000"> * This is the head of the queue of available</font>
+<a name="line4564">4564: </a><font color="#800000"> * buffers-- all unused except for the 2 list heads.</font>
+<a name="line4565">4565: </a><font color="#800000"> */</font>
+<a name="line4566">4566: </a><font color="#000000">struct</font>  buf bfreelist;
+<a name="line4567">4567: </a>
+<a name="line4568">4568: </a><font color="#800000">/*</font>
+<a name="line4569">4569: </a><font color="#800000"> * These flags are kept in b_flags.</font>
+<a name="line4570">4570: </a><font color="#800000"> */</font>
+<a name="line4571">4571: </a><font color="#000000">#define B_WRITE 0       </font><font color="#800000">/* non-read pseudo-flag */</font><font color="#000000"></font>
+<a name="line4572">4572: </a><font color="#000000">#define B_READ  01      </font><font color="#800000">/* read when I/O occurs */</font><font color="#000000"></font>
+<a name="line4573">4573: </a><font color="#000000">#define B_DONE  02      </font><font color="#800000">/* transaction finished */</font><font color="#000000"></font>
+<a name="line4574">4574: </a><font color="#000000">#define B_ERROR 04      </font><font color="#800000">/* transaction aborted */</font><font color="#000000"></font>
+<a name="line4575">4575: </a><font color="#000000">#define B_BUSY  010     </font><font color="#800000">/* not on av_forw/back list */</font><font color="#000000"></font>
+<a name="line4576">4576: </a><font color="#000000">#define B_PHYS  020     </font><font color="#800000">/* Physical IO potentially using UNIBUS map */</font><font color="#000000"></font>
+<a name="line4577">4577: </a>
+<a name="line4578">4578: </a><font color="#000000">#define B_MAP   040     </font><font color="#800000">/* This block has the UNIBUS map allocated */</font><font color="#000000"></font>
+<a name="line4579">4579: </a>
+<a name="line4580">4580: </a><font color="#000000">#define B_WANTED 0100   </font><font color="#800000">/* issue wakeup when BUSY goes off */</font><font color="#000000"></font>
+<a name="line4581">4581: </a>
+<a name="line4582">4582: </a><font color="#000000">#define B_RELOC 0200    </font><font color="#800000">/* no longer used */</font><font color="#000000"></font>
+<a name="line4583">4583: </a><font color="#000000">#define B_ASYNC 0400    </font><font color="#800000">/* don't wait for I/O completion */</font><font color="#000000"></font>
+<a name="line4584">4584: </a>
+<a name="line4585">4585: </a><font color="#000000">#define B_DELWRI 01000  </font><font color="#800000">/* don't write till block leaves available list */</font><font color="#000000"></font>
+</pre>
+</body>
+
+</html>

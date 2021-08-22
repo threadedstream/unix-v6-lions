@@ -1,0 +1,29 @@
+
+<html>
+<head>
+<title>text.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4300">4300: </a><font color="#800000">/*</font>
+<a name="line4301">4301: </a><font color="#800000"> * Text structure.</font>
+<a name="line4302">4302: </a><font color="#800000"> * One allocated per pure</font>
+<a name="line4303">4303: </a><font color="#800000"> * procedure on swap device.</font>
+<a name="line4304">4304: </a><font color="#800000"> * Manipulated by text.c</font>
+<a name="line4305">4305: </a><font color="#800000"> */</font>
+<a name="line4306">4306: </a><font color="#000000"><a name="text"></a>struct text</font>
+<a name="line4307">4307: </a>{
+<a name="line4308">4308: </a>        int     x_daddr;        <font color="#800000">/* disk address of segment */</font>
+<a name="line4309">4309: </a>        int     x_caddr;        <font color="#800000">/* core address, if loaded */</font>
+<a name="line4310">4310: </a>        int     x_size;         <font color="#800000">/* size (*64) */</font>
+<a name="line4311">4311: </a>        int     *x_iptr;        <font color="#800000">/* inode of prototype */</font>
+<a name="line4312">4312: </a>        char    x_count;        <font color="#800000">/* reference count */</font>
+<a name="line4313">4313: </a>        char    x_ccount;       <font color="#800000">/* number of loaded references */</font>
+<a name="line4314">4314: </a>} text[NTEXT];
+<a name="line4315">4315: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

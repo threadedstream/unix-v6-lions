@@ -1,0 +1,347 @@
+
+<html>
+<head>
+<title>alloc.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line6900">6900: </a><font color="#000000">#</font>
+<a name="line6901">6901: </a><font color="#800000">/*</font>
+<a name="line6902">6902: </a><font color="#800000"> */</font>
+<a name="line6903">6903: </a>
+<a name="line6904">6904: </a><font color="#000000">#include "../param.h"</font>
+<a name="line6905">6905: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line6906">6906: </a><font color="#000000">#include "../filsys.h"</font>
+<a name="line6907">6907: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line6908">6908: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line6909">6909: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line6910">6910: </a><font color="#000000">#include "../user.h"</font>
+<a name="line6911">6911: </a>
+<a name="line6912">6912: </a><font color="#800000">/*</font>
+<a name="line6913">6913: </a><font color="#800000"> * iinit is called once (from main)</font>
+<a name="line6914">6914: </a><font color="#800000"> * very early in initialization.</font>
+<a name="line6915">6915: </a><font color="#800000"> * It reads the root's super block</font>
+<a name="line6916">6916: </a><font color="#800000"> * and initializes the current date</font>
+<a name="line6917">6917: </a><font color="#800000"> * from the last modified date.</font>
+<a name="line6918">6918: </a><font color="#800000"> *</font>
+<a name="line6919">6919: </a><font color="#800000"> * panic: iinit -- cannot read the super</font>
+<a name="line6920">6920: </a><font color="#800000"> * block. Usually because of an IO error.</font>
+<a name="line6921">6921: </a><font color="#800000"> */</font>
+<a name="line6922">6922: </a><font color="#000000"><a name="init"></a>iinit()</font>
+<a name="line6923">6923: </a>{
+<a name="line6924">6924: </a>        register *cp, *bp;
+<a name="line6925">6925: </a>
+<a name="line6926">6926: </a>        (*bdevsw[rootdev.d_major].d_open)(rootdev, 1);
+<a name="line6927">6927: </a>        bp = bread(rootdev, 1);
+<a name="line6928">6928: </a>        cp = getblk(NODEV);
+<a name="line6929">6929: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line6930">6930: </a>                panic(<font color="#000000">"iinit"</font>);
+<a name="line6931">6931: </a>        bcopy(bp-&gt;b_addr, cp-&gt;b_addr, 256);
+<a name="line6932">6932: </a>        brelse(bp);
+<a name="line6933">6933: </a>        mount[0].m_bufp = cp;
+<a name="line6934">6934: </a>        mount[0].m_dev = rootdev;
+<a name="line6935">6935: </a>        cp = cp-&gt;b_addr;
+<a name="line6936">6936: </a>        cp-&gt;s_flock = 0;
+<a name="line6937">6937: </a>        cp-&gt;s_ilock = 0;
+<a name="line6938">6938: </a>        cp-&gt;s_ronly = 0;
+<a name="line6939">6939: </a>        time[0] = cp-&gt;s_time[0];
+<a name="line6940">6940: </a>        time[1] = cp-&gt;s_time[1];
+<a name="line6941">6941: </a>}
+<a name="line6942">6942: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6943">6943: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6944">6944: </a>
+<a name="line6945">6945: </a><font color="#800000">/*</font>
+<a name="line6946">6946: </a><font color="#800000"> * alloc will obtain the next available</font>
+<a name="line6947">6947: </a><font color="#800000"> * free disk block from the free list of</font>
+<a name="line6948">6948: </a><font color="#800000"> * the specified device.</font>
+<a name="line6949">6949: </a><font color="#800000"> * The super block has up to 100 remembered</font>
+<a name="line6950">6950: </a><font color="#800000"> * free blocks; the last of these is read to</font>
+<a name="line6951">6951: </a><font color="#800000"> * obtain 100 more . . .</font>
+<a name="line6952">6952: </a><font color="#800000"> *</font>
+<a name="line6953">6953: </a><font color="#800000"> * no space on dev x/y -- when</font>
+<a name="line6954">6954: </a><font color="#800000"> * the free list is exhausted.</font>
+<a name="line6955">6955: </a><font color="#800000"> */</font>
+<a name="line6956">6956: </a><font color="#000000"><a name="lloc"></a>alloc(dev)</font>
+<a name="line6957">6957: </a>{
+<a name="line6958">6958: </a>        int bno;
+<a name="line6959">6959: </a>        register *bp, *ip, *fp;
+<a name="line6960">6960: </a>
+<a name="line6961">6961: </a>        fp = getfs(dev);
+<a name="line6962">6962: </a>        <font color="#000000">while</font>(fp-&gt;s_flock)
+<a name="line6963">6963: </a>                sleep(&amp;fp-&gt;s_flock, PINOD);
+<a name="line6964">6964: </a>        <font color="#000000">do</font> {
+<a name="line6965">6965: </a>                <font color="#000000">if</font>(fp-&gt;s_nfree &lt;= 0)
+<a name="line6966">6966: </a>                        <font color="#000000">goto</font> nospace;
+<a name="line6967">6967: </a>                bno = fp-&gt;s_free[--fp-&gt;s_nfree];
+<a name="line6968">6968: </a>                <font color="#000000">if</font>(bno == 0)
+<a name="line6969">6969: </a>                        <font color="#000000">goto</font> nospace;
+<a name="line6970">6970: </a>        } <font color="#000000">while</font> (badblock(fp, bno, dev));
+<a name="line6971">6971: </a>        <font color="#000000">if</font>(fp-&gt;s_nfree &lt;= 0) {
+<a name="line6972">6972: </a>                fp-&gt;s_flock++;
+<a name="line6973">6973: </a>                bp = bread(dev, bno);
+<a name="line6974">6974: </a>                ip = bp-&gt;b_addr;
+<a name="line6975">6975: </a>                fp-&gt;s_nfree = *ip++;
+<a name="line6976">6976: </a>                bcopy(ip, fp-&gt;s_free, 100);
+<a name="line6977">6977: </a>                brelse(bp);
+<a name="line6978">6978: </a>                fp-&gt;s_flock = 0;
+<a name="line6979">6979: </a>                wakeup(&amp;fp-&gt;s_flock);
+<a name="line6980">6980: </a>        }
+<a name="line6981">6981: </a>        bp = getblk(dev, bno);
+<a name="line6982">6982: </a>        clrbuf(bp);
+<a name="line6983">6983: </a>        fp-&gt;s_fmod = 1;
+<a name="line6984">6984: </a>        <font color="#000000">return</font>(bp);
+<a name="line6985">6985: </a>
+<a name="line6986">6986: </a><font color="#000000">nospace:</font>
+<a name="line6987">6987: </a>        fp-&gt;s_nfree = 0;
+<a name="line6988">6988: </a>        prdev(<font color="#000000">"no space"</font>, dev);
+<a name="line6989">6989: </a>        u.u_error = ENOSPC;
+<a name="line6990">6990: </a>        <font color="#000000">return</font>(NULL);
+<a name="line6991">6991: </a>}
+<a name="line6992">6992: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6993">6993: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6994">6994: </a>
+<a name="line6995">6995: </a><font color="#800000">/*</font>
+<a name="line6996">6996: </a><font color="#800000"> * place the specified disk block</font>
+<a name="line6997">6997: </a><font color="#800000"> * back on the free list of the</font>
+<a name="line6998">6998: </a><font color="#800000"> * specified device.</font>
+<a name="line6999">6999: </a><font color="#800000"> */</font>
+<a name="line7000">7000: </a><font color="#000000"><a name="ree"></a>free(dev, bno)</font>
+<a name="line7001">7001: </a>{
+<a name="line7002">7002: </a>        register *fp, *bp, *ip;
+<a name="line7003">7003: </a>
+<a name="line7004">7004: </a>        fp = getfs(dev);
+<a name="line7005">7005: </a>        fp-&gt;s_fmod = 1;
+<a name="line7006">7006: </a>        <font color="#000000">while</font>(fp-&gt;s_flock)
+<a name="line7007">7007: </a>                sleep(&amp;fp-&gt;s_flock, PINOD);
+<a name="line7008">7008: </a>        <font color="#000000">if</font> (badblock(fp, bno, dev))
+<a name="line7009">7009: </a>                <font color="#000000">return</font>;
+<a name="line7010">7010: </a>        <font color="#000000">if</font>(fp-&gt;s_nfree &lt;= 0) {
+<a name="line7011">7011: </a>                fp-&gt;s_nfree = 1;
+<a name="line7012">7012: </a>                fp-&gt;s_free[0] = 0;
+<a name="line7013">7013: </a>        }
+<a name="line7014">7014: </a>        <font color="#000000">if</font>(fp-&gt;s_nfree &gt;= 100) {
+<a name="line7015">7015: </a>                fp-&gt;s_flock++;
+<a name="line7016">7016: </a>                bp = getblk(dev, bno);
+<a name="line7017">7017: </a>                ip = bp-&gt;b_addr;
+<a name="line7018">7018: </a>                *ip++ = fp-&gt;s_nfree;
+<a name="line7019">7019: </a>                bcopy(fp-&gt;s_free, ip, 100);
+<a name="line7020">7020: </a>                fp-&gt;s_nfree = 0;
+<a name="line7021">7021: </a>                bwrite(bp);
+<a name="line7022">7022: </a>                fp-&gt;s_flock = 0;
+<a name="line7023">7023: </a>                wakeup(&amp;fp-&gt;s_flock);
+<a name="line7024">7024: </a>        }
+<a name="line7025">7025: </a>        fp-&gt;s_free[fp-&gt;s_nfree++] = bno;
+<a name="line7026">7026: </a>        fp-&gt;s_fmod = 1;
+<a name="line7027">7027: </a>}
+<a name="line7028">7028: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7029">7029: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7030">7030: </a>
+<a name="line7031">7031: </a><font color="#800000">/*</font>
+<a name="line7032">7032: </a><font color="#800000"> * Check that a block number is in the</font>
+<a name="line7033">7033: </a><font color="#800000"> * range between the I list and the size</font>
+<a name="line7034">7034: </a><font color="#800000"> * of the device.</font>
+<a name="line7035">7035: </a><font color="#800000"> * This is used mainly to check that a</font>
+<a name="line7036">7036: </a><font color="#800000"> * garbage file system has not been mounted.</font>
+<a name="line7037">7037: </a><font color="#800000"> *</font>
+<a name="line7038">7038: </a><font color="#800000"> * bad block on dev x/y -- not in range</font>
+<a name="line7039">7039: </a><font color="#800000"> */</font>
+<a name="line7040">7040: </a><font color="#000000"><a name="adblock"></a>badblock(afp, abn, dev)</font>
+<a name="line7041">7041: </a>{
+<a name="line7042">7042: </a>        register <font color="#000000">struct filsys</font> *fp;
+<a name="line7043">7043: </a>        register char *bn;
+<a name="line7044">7044: </a>
+<a name="line7045">7045: </a>        fp = afp;
+<a name="line7046">7046: </a>        bn = abn;
+<a name="line7047">7047: </a>        <font color="#000000">if</font> (bn &lt; fp-&gt;s_isize+2 || bn &gt;= fp-&gt;s_fsize) {
+<a name="line7048">7048: </a>                prdev(<font color="#000000">"bad block"</font>, dev);
+<a name="line7049">7049: </a>                <font color="#000000">return</font>(1);
+<a name="line7050">7050: </a>        }
+<a name="line7051">7051: </a>        <font color="#000000">return</font>(0);
+<a name="line7052">7052: </a>}
+<a name="line7053">7053: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7054">7054: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7055">7055: </a>
+<a name="line7056">7056: </a><font color="#800000">/*</font>
+<a name="line7057">7057: </a><font color="#800000"> * Allocate an unused I node</font>
+<a name="line7058">7058: </a><font color="#800000"> * on the specified device.</font>
+<a name="line7059">7059: </a><font color="#800000"> * Used with file creation.</font>
+<a name="line7060">7060: </a><font color="#800000"> * The algorithm keeps up to</font>
+<a name="line7061">7061: </a><font color="#800000"> * 100 spare I nodes in the</font>
+<a name="line7062">7062: </a><font color="#800000"> * super block. When this runs out,</font>
+<a name="line7063">7063: </a><font color="#800000"> * a linear search through the</font>
+<a name="line7064">7064: </a><font color="#800000"> * I list is instituted to pick</font>
+<a name="line7065">7065: </a><font color="#800000"> * up 100 more.</font>
+<a name="line7066">7066: </a><font color="#800000"> */</font>
+<a name="line7067">7067: </a><font color="#000000"><a name="alloc"></a>ialloc(dev)</font>
+<a name="line7068">7068: </a>{
+<a name="line7069">7069: </a>        register *fp, *bp, *ip;
+<a name="line7070">7070: </a>        int i, j, k, ino;
+<a name="line7071">7071: </a>
+<a name="line7072">7072: </a>        fp = getfs(dev);
+<a name="line7073">7073: </a>        <font color="#000000">while</font>(fp-&gt;s_ilock)
+<a name="line7074">7074: </a>                sleep(&amp;fp-&gt;s_ilock, PINOD);
+<a name="line7075">7075: </a><font color="#000000">loop:</font>
+<a name="line7076">7076: </a>        <font color="#000000">if</font>(fp-&gt;s_ninode &gt; 0) {
+<a name="line7077">7077: </a>                ino = fp-&gt;s_inode[--fp-&gt;s_ninode];
+<a name="line7078">7078: </a>                ip = iget(dev, ino);
+<a name="line7079">7079: </a>                <font color="#000000">if</font> (ip==NULL)
+<a name="line7080">7080: </a>                        <font color="#000000">return</font>(NULL);
+<a name="line7081">7081: </a>                <font color="#000000">if</font>(ip-&gt;i_mode == 0) {
+<a name="line7082">7082: </a>                        <font color="#000000">for</font>(bp = &amp;ip-&gt;i_mode; bp &lt; &amp;ip-&gt;i_addr[8];)
+<a name="line7083">7083: </a>                                *bp++ = 0;
+<a name="line7084">7084: </a>                        fp-&gt;s_fmod = 1;
+<a name="line7085">7085: </a>                        <font color="#000000">return</font>(ip);
+<a name="line7086">7086: </a>                }
+<a name="line7087">7087: </a>                <font color="#800000">/*</font>
+<a name="line7088">7088: </a><font color="#800000">                 * Inode was allocated after all.</font>
+<a name="line7089">7089: </a><font color="#800000">                 * Look some more.</font>
+<a name="line7090">7090: </a><font color="#800000">                 */</font>
+<a name="line7091">7091: </a>                iput(ip);
+<a name="line7092">7092: </a>                <font color="#000000">goto</font> loop;
+<a name="line7093">7093: </a>        }
+<a name="line7094">7094: </a>        fp-&gt;s_ilock++;
+<a name="line7095">7095: </a>        ino = 0;
+<a name="line7096">7096: </a>        <font color="#000000">for</font>(i=0; i&lt;fp-&gt;s_isize; i++) {
+<a name="line7097">7097: </a>                bp = bread(dev, i+2);
+<a name="line7098">7098: </a>                ip = bp-&gt;b_addr;
+<a name="line7099">7099: </a>                <font color="#000000">for</font>(j=0; j&lt;256; j=+16) {
+<a name="line7100">7100: </a>                        ino++;
+<a name="line7101">7101: </a>                        <font color="#000000">if</font>(ip[j] != 0)
+<a name="line7102">7102: </a>                                <font color="#000000">continue</font>;
+<a name="line7103">7103: </a>                        <font color="#000000">for</font>(k=0; k&lt;NINODE; k++)
+<a name="line7104">7104: </a>
+<a name="line7105">7105: </a>                        <font color="#000000">if</font>(dev==inode[k].i_dev &amp;&amp; ino==inode[k].i_number)
+<a name="line7106">7106: </a>                                <font color="#000000">goto</font> cont;
+<a name="line7107">7107: </a>                        fp-&gt;s_inode[fp-&gt;s_ninode++] = ino;
+<a name="line7108">7108: </a>                        <font color="#000000">if</font>(fp-&gt;s_ninode &gt;= 100)
+<a name="line7109">7109: </a>                                <font color="#000000">break</font>;
+<a name="line7110">7110: </a><font color="#000000">                cont:</font>;
+<a name="line7111">7111: </a>                }
+<a name="line7112">7112: </a>                brelse(bp);
+<a name="line7113">7113: </a>                <font color="#000000">if</font>(fp-&gt;s_ninode &gt;= 100)
+<a name="line7114">7114: </a>                        <font color="#000000">break</font>;
+<a name="line7115">7115: </a>        }
+<a name="line7116">7116: </a>        fp-&gt;s_ilock = 0;
+<a name="line7117">7117: </a>        wakeup(&amp;fp-&gt;s_ilock);
+<a name="line7118">7118: </a>        <font color="#000000">if</font> (fp-&gt;s_ninode &gt; 0)
+<a name="line7119">7119: </a>                <font color="#000000">goto</font> loop;
+<a name="line7120">7120: </a>        prdev(<font color="#000000">"Out of inodes"</font>, dev);
+<a name="line7121">7121: </a>        u.u_error = ENOSPC;
+<a name="line7122">7122: </a>        <font color="#000000">return</font>(NULL);
+<a name="line7123">7123: </a>}
+<a name="line7124">7124: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7125">7125: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7126">7126: </a>
+<a name="line7127">7127: </a><font color="#800000">/*</font>
+<a name="line7128">7128: </a><font color="#800000"> * Free the specified I node</font>
+<a name="line7129">7129: </a><font color="#800000"> * on the specified device.</font>
+<a name="line7130">7130: </a><font color="#800000"> * The algorithm stores up</font>
+<a name="line7131">7131: </a><font color="#800000"> * to 100 I nodes in the super</font>
+<a name="line7132">7132: </a><font color="#800000"> * block and throws away any more.</font>
+<a name="line7133">7133: </a><font color="#800000"> */</font>
+<a name="line7134">7134: </a><font color="#000000"><a name="free"></a>ifree(dev, ino)</font>
+<a name="line7135">7135: </a>{
+<a name="line7136">7136: </a>        register *fp;
+<a name="line7137">7137: </a>
+<a name="line7138">7138: </a>        fp = getfs(dev);
+<a name="line7139">7139: </a>        <font color="#000000">if</font>(fp-&gt;s_ilock)
+<a name="line7140">7140: </a>                <font color="#000000">return</font>;
+<a name="line7141">7141: </a>        <font color="#000000">if</font>(fp-&gt;s_ninode &gt;= 100)
+<a name="line7142">7142: </a>                <font color="#000000">return</font>;
+<a name="line7143">7143: </a>        fp-&gt;s_inode[fp-&gt;s_ninode++] = ino;
+<a name="line7144">7144: </a>        fp-&gt;s_fmod = 1;
+<a name="line7145">7145: </a>}
+<a name="line7146">7146: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7147">7147: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7148">7148: </a>
+<a name="line7149">7149: </a><font color="#800000">/*</font>
+<a name="line7150">7150: </a><font color="#800000"> * getfs maps a device number into</font>
+<a name="line7151">7151: </a><font color="#800000"> * a pointer to the incore super</font>
+<a name="line7152">7152: </a><font color="#800000"> * block.</font>
+<a name="line7153">7153: </a><font color="#800000"> * The algorithm is a linear</font>
+<a name="line7154">7154: </a><font color="#800000"> * search through the mount table.</font>
+<a name="line7155">7155: </a><font color="#800000"> * A consistency check of the</font>
+<a name="line7156">7156: </a><font color="#800000"> * in core free-block and i-node</font>
+<a name="line7157">7157: </a><font color="#800000"> * counts.</font>
+<a name="line7158">7158: </a><font color="#800000"> *</font>
+<a name="line7159">7159: </a><font color="#800000"> * bad count on dev x/y -- the count</font>
+<a name="line7160">7160: </a><font color="#800000"> *      check failed. At this point, all</font>
+<a name="line7161">7161: </a><font color="#800000"> *      the counts are zeroed which will</font>
+<a name="line7162">7162: </a><font color="#800000"> *      almost certainly lead to "no space"</font>
+<a name="line7163">7163: </a><font color="#800000"> *      diagnostic</font>
+<a name="line7164">7164: </a><font color="#800000"> * panic: no fs -- the device is not mounted.</font>
+<a name="line7165">7165: </a><font color="#800000"> *      this "cannot happen"</font>
+<a name="line7166">7166: </a><font color="#800000"> */</font>
+<a name="line7167">7167: </a><font color="#000000"><a name="etfs"></a>getfs(dev)</font>
+<a name="line7168">7168: </a>{
+<a name="line7169">7169: </a>        register <font color="#000000">struct mount</font> *p;
+<a name="line7170">7170: </a>        register char *n1, *n2;
+<a name="line7171">7171: </a>
+<a name="line7172">7172: </a>        <font color="#000000">for</font>(p = &amp;mount[0]; p &lt; &amp;mount[NMOUNT]; p++)
+<a name="line7173">7173: </a>        <font color="#000000">if</font>(p-&gt;m_bufp != NULL &amp;&amp; p-&gt;m_dev == dev) {
+<a name="line7174">7174: </a>                p = p-&gt;m_bufp-&gt;b_addr;
+<a name="line7175">7175: </a>                n1 = p-&gt;s_nfree;
+<a name="line7176">7176: </a>                n2 = p-&gt;s_ninode;
+<a name="line7177">7177: </a>                <font color="#000000">if</font>(n1 &gt; 100 || n2 &gt; 100) {
+<a name="line7178">7178: </a>                        prdev(<font color="#000000">"bad count"</font>, dev);
+<a name="line7179">7179: </a>                        p-&gt;s_nfree = 0;
+<a name="line7180">7180: </a>                        p-&gt;s_ninode = 0;
+<a name="line7181">7181: </a>                }
+<a name="line7182">7182: </a>                <font color="#000000">return</font>(p);
+<a name="line7183">7183: </a>        }
+<a name="line7184">7184: </a>        panic(<font color="#000000">"no fs"</font>);
+<a name="line7185">7185: </a>}
+<a name="line7186">7186: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7187">7187: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7188">7188: </a>
+<a name="line7189">7189: </a><font color="#800000">/*</font>
+<a name="line7190">7190: </a><font color="#800000"> * update is the internal name of</font>
+<a name="line7191">7191: </a><font color="#800000"> * 'sync'. It goes through the disk</font>
+<a name="line7192">7192: </a><font color="#800000"> * queues to initiate sandbagged IO;</font>
+<a name="line7193">7193: </a><font color="#800000"> * goes through the I nodes to write</font>
+<a name="line7194">7194: </a><font color="#800000"> * modified nodes; and it goes through</font>
+<a name="line7195">7195: </a><font color="#800000"> * the mount table to initiate modified</font>
+<a name="line7196">7196: </a><font color="#800000"> * super blocks.</font>
+<a name="line7197">7197: </a><font color="#800000"> */</font>
+<a name="line7198">7198: </a>
+<a name="line7199">7199: </a>
+<a name="line7200">7200: </a>
+<a name="line7201">7201: </a><font color="#000000"><a name="pdate"></a>update()</font>
+<a name="line7202">7202: </a>{
+<a name="line7203">7203: </a>        register <font color="#000000">struct inode</font> *ip;
+<a name="line7204">7204: </a>        register <font color="#000000">struct mount</font> *mp;
+<a name="line7205">7205: </a>        register *bp;
+<a name="line7206">7206: </a>
+<a name="line7207">7207: </a>        <font color="#000000">if</font>(updlock)
+<a name="line7208">7208: </a>                <font color="#000000">return</font>;
+<a name="line7209">7209: </a>        updlock++;
+<a name="line7210">7210: </a>        <font color="#000000">for</font>(mp = &amp;mount[0]; mp &lt; &amp;mount[NMOUNT]; mp++)
+<a name="line7211">7211: </a>                <font color="#000000">if</font>(mp-&gt;m_bufp != NULL) {
+<a name="line7212">7212: </a>                        ip = mp-&gt;m_bufp-&gt;b_addr;
+<a name="line7213">7213: </a>                        <font color="#000000">if</font>(ip-&gt;s_fmod==0 || ip-&gt;s_ilock!=0 ||
+<a name="line7214">7214: </a>                           ip-&gt;s_flock!=0 || ip-&gt;s_ronly!=0)
+<a name="line7215">7215: </a>                                <font color="#000000">continue</font>;
+<a name="line7216">7216: </a>                        bp = getblk(mp-&gt;m_dev, 1);
+<a name="line7217">7217: </a>                        ip-&gt;s_fmod = 0;
+<a name="line7218">7218: </a>                        ip-&gt;s_time[0] = time[0];
+<a name="line7219">7219: </a>                        ip-&gt;s_time[1] = time[1];
+<a name="line7220">7220: </a>                        bcopy(ip, bp-&gt;b_addr, 256);
+<a name="line7221">7221: </a>                        bwrite(bp);
+<a name="line7222">7222: </a>                }
+<a name="line7223">7223: </a>        <font color="#000000">for</font>(ip = &amp;inode[0]; ip &lt; &amp;inode[NINODE]; ip++)
+<a name="line7224">7224: </a>                <font color="#000000">if</font>((ip-&gt;i_flag&amp;ILOCK) == 0) {
+<a name="line7225">7225: </a>                        ip-&gt;i_flag =| ILOCK;
+<a name="line7226">7226: </a>                        iupdat(ip, time);
+<a name="line7227">7227: </a>                        prele(ip);
+<a name="line7228">7228: </a>                }
+<a name="line7229">7229: </a>        updlock = 0;
+<a name="line7230">7230: </a>        bflush(NODEV);
+<a name="line7231">7231: </a>}
+<a name="line7232">7232: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7233">7233: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

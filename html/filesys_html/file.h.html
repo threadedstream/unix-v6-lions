@@ -1,0 +1,33 @@
+
+<html>
+<head>
+<title>file.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5500">5500: </a><font color="#800000">/*</font>
+<a name="line5501">5501: </a><font color="#800000"> * One file structure is allocated</font>
+<a name="line5502">5502: </a><font color="#800000"> * for each open/creat/pipe call.</font>
+<a name="line5503">5503: </a><font color="#800000"> * Main use is to hold the read/write</font>
+<a name="line5504">5504: </a><font color="#800000"> * pointer associated with each open</font>
+<a name="line5505">5505: </a><font color="#800000"> * file.</font>
+<a name="line5506">5506: </a><font color="#800000"> */</font>
+<a name="line5507">5507: </a><font color="#000000">struct</font>  file
+<a name="line5508">5508: </a>{
+<a name="line5509">5509: </a>        char    f_flag;
+<a name="line5510">5510: </a>        char    f_count;        <font color="#800000">/* reference count */</font>
+<a name="line5511">5511: </a>        int     f_inode;        <font color="#800000">/* pointer to inode structure */</font>
+<a name="line5512">5512: </a>        char    *f_offset[2];   <font color="#800000">/* read/write character pointer */</font>
+<a name="line5513">5513: </a>} file[NFILE];
+<a name="line5514">5514: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5515">5515: </a>
+<a name="line5516">5516: </a><font color="#800000">/* flags */</font>
+<a name="line5517">5517: </a><font color="#000000">#define FREAD   01</font>
+<a name="line5518">5518: </a><font color="#000000">#define FWRITE  02</font>
+<a name="line5519">5519: </a><font color="#000000">#define FPIPE   04</font>
+</pre>
+</body>
+
+</html>

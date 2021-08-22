@@ -1,0 +1,289 @@
+
+<html>
+<head>
+<title>sys4.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line3400">3400: </a>
+<a name="line3401">3401: </a><font color="#800000">/*</font>
+<a name="line3402">3402: </a><font color="#800000"> * Everything in this file is a routine implementing a system call.</font>
+<a name="line3403">3403: </a><font color="#800000"> *</font>
+<a name="line3404">3404: </a><font color="#800000"> */</font>
+<a name="line3405">3405: </a>
+<a name="line3406">3406: </a><font color="#000000">#include "../param.h"</font>
+<a name="line3407">3407: </a><font color="#000000">#include "../user.h"</font>
+<a name="line3408">3408: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line3409">3409: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line3410">3410: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line3411">3411: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line3412">3412: </a>
+<a name="line3413">3413: </a><font color="#000000"><a name="etswit"></a>getswit()</font>
+<a name="line3414">3414: </a>{
+<a name="line3415">3415: </a>
+<a name="line3416">3416: </a>        u.u_ar0[R0] = SW-&gt;integ;
+<a name="line3417">3417: </a>}
+<a name="line3418">3418: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3419">3419: </a>
+<a name="line3420">3420: </a><font color="#000000"><a name="time"></a>gtime()</font>
+<a name="line3421">3421: </a>{
+<a name="line3422">3422: </a>
+<a name="line3423">3423: </a>        u.u_ar0[R0] = time[0];
+<a name="line3424">3424: </a>        u.u_ar0[R1] = time[1];
+<a name="line3425">3425: </a>}
+<a name="line3426">3426: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3427">3427: </a>
+<a name="line3428">3428: </a><font color="#000000"><a name="time"></a>stime()</font>
+<a name="line3429">3429: </a>{
+<a name="line3430">3430: </a>
+<a name="line3431">3431: </a>        <font color="#000000">if</font>(suser()) {
+<a name="line3432">3432: </a>                time[0] = u.u_ar0[R0];
+<a name="line3433">3433: </a>                time[1] = u.u_ar0[R1];
+<a name="line3434">3434: </a>                wakeup(tout);
+<a name="line3435">3435: </a>        }
+<a name="line3436">3436: </a>}
+<a name="line3437">3437: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3438">3438: </a>
+<a name="line3439">3439: </a><font color="#000000"><a name="etuid"></a>setuid()</font>
+<a name="line3440">3440: </a>{
+<a name="line3441">3441: </a>        register uid;
+<a name="line3442">3442: </a>
+<a name="line3443">3443: </a>        uid = u.u_ar0[R0].lobyte;
+<a name="line3444">3444: </a>        <font color="#000000">if</font>(u.u_ruid == uid.lobyte || suser()) {
+<a name="line3445">3445: </a>                u.u_uid = uid;
+<a name="line3446">3446: </a>                u.u_procp-&gt;p_uid = uid;
+<a name="line3447">3447: </a>                u.u_ruid = uid;
+<a name="line3448">3448: </a>        }
+<a name="line3449">3449: </a>}
+<a name="line3450">3450: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3451">3451: </a>
+<a name="line3452">3452: </a><font color="#000000"><a name="etuid"></a>getuid()</font>
+<a name="line3453">3453: </a>{
+<a name="line3454">3454: </a>
+<a name="line3455">3455: </a>        u.u_ar0[R0].lobyte = u.u_ruid;
+<a name="line3456">3456: </a>        u.u_ar0[R0].hibyte = u.u_uid;
+<a name="line3457">3457: </a>}
+<a name="line3458">3458: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3459">3459: </a>
+<a name="line3460">3460: </a><font color="#000000"><a name="etgid"></a>setgid()</font>
+<a name="line3461">3461: </a>{
+<a name="line3462">3462: </a>        register gid;
+<a name="line3463">3463: </a>
+<a name="line3464">3464: </a>        gid = u.u_ar0[R0].lobyte;
+<a name="line3465">3465: </a>        <font color="#000000">if</font>(u.u_rgid == gid.lobyte || suser()) {
+<a name="line3466">3466: </a>                u.u_gid = gid;
+<a name="line3467">3467: </a>                u.u_rgid = gid;
+<a name="line3468">3468: </a>        }
+<a name="line3469">3469: </a>}
+<a name="line3470">3470: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3471">3471: </a>
+<a name="line3472">3472: </a><font color="#000000"><a name="etgid"></a>getgid()</font>
+<a name="line3473">3473: </a>{
+<a name="line3474">3474: </a>
+<a name="line3475">3475: </a>        u.u_ar0[R0].lobyte = u.u_rgid;
+<a name="line3476">3476: </a>        u.u_ar0[R0].hibyte = u.u_gid;
+<a name="line3477">3477: </a>}
+<a name="line3478">3478: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3479">3479: </a>
+<a name="line3480">3480: </a><font color="#000000"><a name="etpid"></a>getpid()</font>
+<a name="line3481">3481: </a>{
+<a name="line3482">3482: </a>        u.u_ar0[R0] = u.u_procp-&gt;p_pid;
+<a name="line3483">3483: </a>}
+<a name="line3484">3484: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3485">3485: </a>
+<a name="line3486">3486: </a><font color="#000000"><a name="ync"></a>sync()</font>
+<a name="line3487">3487: </a>{
+<a name="line3488">3488: </a>
+<a name="line3489">3489: </a>        update();
+<a name="line3490">3490: </a>}
+<a name="line3491">3491: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3492">3492: </a>
+<a name="line3493">3493: </a><font color="#000000"><a name="ice"></a>nice()</font>
+<a name="line3494">3494: </a>{
+<a name="line3495">3495: </a>        register n;
+<a name="line3496">3496: </a>
+<a name="line3497">3497: </a>        n = u.u_ar0[R0];
+<a name="line3498">3498: </a>        <font color="#000000">if</font>(n &gt; 20)
+<a name="line3499">3499: </a>                n = 20;
+<a name="line3500">3500: </a>        <font color="#000000">if</font>(n &lt; 0 &amp;&amp; !suser())
+<a name="line3501">3501: </a>                n = 0;
+<a name="line3502">3502: </a>        u.u_procp-&gt;p_nice = n;
+<a name="line3503">3503: </a>}
+<a name="line3504">3504: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3505">3505: </a>
+<a name="line3506">3506: </a><font color="#800000">/*</font>
+<a name="line3507">3507: </a><font color="#800000"> * Unlink system call.</font>
+<a name="line3508">3508: </a><font color="#800000"> * panic: unlink -- "cannot happen"</font>
+<a name="line3509">3509: </a><font color="#800000"> */</font>
+<a name="line3510">3510: </a><font color="#000000"><a name="nlink"></a>unlink()</font>
+<a name="line3511">3511: </a>{
+<a name="line3512">3512: </a>        register *ip, *pp;
+<a name="line3513">3513: </a>        extern uchar;
+<a name="line3514">3514: </a>
+<a name="line3515">3515: </a>        pp = namei(&amp;uchar, 2);
+<a name="line3516">3516: </a>        <font color="#000000">if</font>(pp == NULL)
+<a name="line3517">3517: </a>                <font color="#000000">return</font>;
+<a name="line3518">3518: </a>        prele(pp);
+<a name="line3519">3519: </a>        ip = iget(pp-&gt;i_dev, u.u_dent.u_ino);
+<a name="line3520">3520: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line3521">3521: </a>                panic(<font color="#000000">"unlink -- iget"</font>);
+<a name="line3522">3522: </a>        <font color="#000000">if</font>((ip-&gt;i_mode&amp;IFMT)==IFDIR &amp;&amp; !suser())
+<a name="line3523">3523: </a>                <font color="#000000">goto</font> out;
+<a name="line3524">3524: </a>        u.u_offset[1] =- DIRSIZ+2;
+<a name="line3525">3525: </a>        u.u_base = &amp;u.u_dent;
+<a name="line3526">3526: </a>        u.u_count = DIRSIZ+2;
+<a name="line3527">3527: </a>        u.u_dent.u_ino = 0;
+<a name="line3528">3528: </a>        writei(pp);
+<a name="line3529">3529: </a>        ip-&gt;i_nlink--;
+<a name="line3530">3530: </a>        ip-&gt;i_flag =| IUPD;
+<a name="line3531">3531: </a>
+<a name="line3532">3532: </a><font color="#000000">out:</font>
+<a name="line3533">3533: </a>        iput(pp);
+<a name="line3534">3534: </a>        iput(ip);
+<a name="line3535">3535: </a>}
+<a name="line3536">3536: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3537">3537: </a>
+<a name="line3538">3538: </a><font color="#000000"><a name="hdir"></a>chdir()</font>
+<a name="line3539">3539: </a>{
+<a name="line3540">3540: </a>        register *ip;
+<a name="line3541">3541: </a>        extern uchar;
+<a name="line3542">3542: </a>
+<a name="line3543">3543: </a>        ip = namei(&amp;uchar, 0);
+<a name="line3544">3544: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line3545">3545: </a>                <font color="#000000">return</font>;
+<a name="line3546">3546: </a>        <font color="#000000">if</font>((ip-&gt;i_mode&amp;IFMT) != IFDIR) {
+<a name="line3547">3547: </a>                u.u_error = ENOTDIR;
+<a name="line3548">3548: </a><font color="#000000">        bad:</font>
+<a name="line3549">3549: </a>                iput(ip);
+<a name="line3550">3550: </a>                <font color="#000000">return</font>;
+<a name="line3551">3551: </a>        }
+<a name="line3552">3552: </a>        <font color="#000000">if</font>(access(ip, IEXEC))
+<a name="line3553">3553: </a>                <font color="#000000">goto</font> bad;
+<a name="line3554">3554: </a>        iput(u.u_cdir);
+<a name="line3555">3555: </a>        u.u_cdir = ip;
+<a name="line3556">3556: </a>        prele(ip);
+<a name="line3557">3557: </a>}
+<a name="line3558">3558: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3559">3559: </a>
+<a name="line3560">3560: </a><font color="#000000"><a name="hmod"></a>chmod()</font>
+<a name="line3561">3561: </a>{
+<a name="line3562">3562: </a>        register *ip;
+<a name="line3563">3563: </a>
+<a name="line3564">3564: </a>        <font color="#000000">if</font> ((ip = owner()) == NULL)
+<a name="line3565">3565: </a>                <font color="#000000">return</font>;
+<a name="line3566">3566: </a>        ip-&gt;i_mode =&amp; ~07777;
+<a name="line3567">3567: </a>        <font color="#000000">if</font> (u.u_uid)
+<a name="line3568">3568: </a>                u.u_arg[1] =&amp; ~ISVTX;
+<a name="line3569">3569: </a>        ip-&gt;i_mode =| u.u_arg[1]&amp;07777;
+<a name="line3570">3570: </a>        ip-&gt;i_flag =| IUPD;
+<a name="line3571">3571: </a>        iput(ip);
+<a name="line3572">3572: </a>}
+<a name="line3573">3573: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3574">3574: </a>
+<a name="line3575">3575: </a><font color="#000000"><a name="hown"></a>chown()</font>
+<a name="line3576">3576: </a>{
+<a name="line3577">3577: </a>        register *ip;
+<a name="line3578">3578: </a>
+<a name="line3579">3579: </a>        <font color="#000000">if</font> (!suser() || (ip = owner()) == NULL)
+<a name="line3580">3580: </a>                <font color="#000000">return</font>;
+<a name="line3581">3581: </a>        ip-&gt;i_uid = u.u_arg[1].lobyte;
+<a name="line3582">3582: </a>        ip-&gt;i_gid = u.u_arg[1].hibyte;
+<a name="line3583">3583: </a>        ip-&gt;i_flag =| IUPD;
+<a name="line3584">3584: </a>        iput(ip);
+<a name="line3585">3585: </a>}
+<a name="line3586">3586: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3587">3587: </a>
+<a name="line3588">3588: </a><font color="#800000">/*</font>
+<a name="line3589">3589: </a><font color="#800000"> * Change modified date of file:</font>
+<a name="line3590">3590: </a><font color="#800000"> * time to r0-r1; sys smdate; file</font>
+<a name="line3591">3591: </a><font color="#800000"> * This call has been withdrawn because it messes up</font>
+<a name="line3592">3592: </a><font color="#800000"> * incremental dumps (pseudo-old files aren't dumped).</font>
+<a name="line3593">3593: </a><font color="#800000"> * It works though and you can uncomment it if you like.</font>
+<a name="line3594">3594: </a><font color="#800000"></font>
+<a name="line3595">3595: </a><font color="#800000"><font color="#000000"><a name="mdate"></a>smdate()</font>
+<a name="line3596">3596: </a>{
+<a name="line3597">3597: </a>        register struct inode *ip;
+<a name="line3598">3598: </a>        register int *tp;
+<a name="line3599">3599: </a>        int tbuf[2];
+<a name="line3600">3600: </a>
+<a name="line3601">3601: </a>        if ((ip = owner()) == NULL)
+<a name="line3602">3602: </a>                return;
+<a name="line3603">3603: </a>        ip-&gt;i_flag =| IUPD;
+<a name="line3604">3604: </a>        tp = &amp;tbuf[2];
+<a name="line3605">3605: </a>        *--tp = u.u_ar0[R1];
+<a name="line3606">3606: </a>        *--tp = u.u_ar0[R0];
+<a name="line3607">3607: </a>        iupdat(ip, tp);
+<a name="line3608">3608: </a>        ip-&gt;i_flag =&amp; ~IUPD;
+<a name="line3609">3609: </a>        iput(ip);
+<a name="line3610">3610: </a>}
+<a name="line3611">3611: </a>*/
+<a name="line3612">3612: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3613">3613: </a>
+<a name="line3614">3614: </a><font color="#000000"><a name="sig"></a>ssig()</font>
+<a name="line3615">3615: </a>{
+<a name="line3616">3616: </a>        register a;
+<a name="line3617">3617: </a>
+<a name="line3618">3618: </a>        a = u.u_arg[0];
+<a name="line3619">3619: </a>        <font color="#000000">if</font>(a&lt;=0 || a&gt;=NSIG || a ==SIGKIL) {
+<a name="line3620">3620: </a>                u.u_error = EINVAL;
+<a name="line3621">3621: </a>                <font color="#000000">return</font>;
+<a name="line3622">3622: </a>        }
+<a name="line3623">3623: </a>        u.u_ar0[R0] = u.u_signal[a];
+<a name="line3624">3624: </a>        u.u_signal[a] = u.u_arg[1];
+<a name="line3625">3625: </a>        <font color="#000000">if</font>(u.u_procp-&gt;p_sig == a)
+<a name="line3626">3626: </a>                u.u_procp-&gt;p_sig = 0;
+<a name="line3627">3627: </a>}
+<a name="line3628">3628: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3629">3629: </a>
+<a name="line3630">3630: </a><font color="#000000"><a name="ill"></a>kill()</font>
+<a name="line3631">3631: </a>{
+<a name="line3632">3632: </a>        register <font color="#000000">struct proc</font> *p, *q;
+<a name="line3633">3633: </a>        register a;
+<a name="line3634">3634: </a>        int f;
+<a name="line3635">3635: </a>
+<a name="line3636">3636: </a>        f = 0;
+<a name="line3637">3637: </a>        a = u.u_ar0[R0];
+<a name="line3638">3638: </a>        q = u.u_procp;
+<a name="line3639">3639: </a>        <font color="#000000">for</font>(p = &amp;proc[0]; p &lt; &amp;proc[NPROC]; p++) {
+<a name="line3640">3640: </a>                <font color="#000000">if</font>(p == q)
+<a name="line3641">3641: </a>                        <font color="#000000">continue</font>;
+<a name="line3642">3642: </a>                <font color="#000000">if</font>(a != 0 &amp;&amp; p-&gt;p_pid != a)
+<a name="line3643">3643: </a>                        <font color="#000000">continue</font>;
+<a name="line3644">3644: </a>                <font color="#000000">if</font>(a == 0 &amp;&amp; (p-&gt;p_ttyp != q-&gt;p_ttyp || p &lt;= &amp;proc[1]))
+<a name="line3645">3645: </a>                        <font color="#000000">continue</font>;
+<a name="line3646">3646: </a>                <font color="#000000">if</font>(u.u_uid != 0 &amp;&amp; u.u_uid != p-&gt;p_uid)
+<a name="line3647">3647: </a>                        <font color="#000000">continue</font>;
+<a name="line3648">3648: </a>                f++;
+<a name="line3649">3649: </a>                psignal(p, u.u_arg[0]);
+<a name="line3650">3650: </a>        }
+<a name="line3651">3651: </a>        <font color="#000000">if</font>(f == 0)
+<a name="line3652">3652: </a>                u.u_error = ESRCH;
+<a name="line3653">3653: </a>}
+<a name="line3654">3654: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3655">3655: </a>
+<a name="line3656">3656: </a><font color="#000000"><a name="imes"></a>times()</font>
+<a name="line3657">3657: </a>{
+<a name="line3658">3658: </a>        register *p;
+<a name="line3659">3659: </a>
+<a name="line3660">3660: </a>        <font color="#000000">for</font>(p = &amp;u.u_utime; p  &lt; &amp;u.u_utime+6;) {
+<a name="line3661">3661: </a>                suword(u.u_arg[0], *p++);
+<a name="line3662">3662: </a>                u.u_arg[0] =+ 2;
+<a name="line3663">3663: </a>        }
+<a name="line3664">3664: </a>}
+<a name="line3665">3665: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3666">3666: </a>
+<a name="line3667">3667: </a><font color="#000000"><a name="rofil"></a>profil()</font>
+<a name="line3668">3668: </a>{
+<a name="line3669">3669: </a>
+<a name="line3670">3670: </a>        u.u_prof[0] = u.u_arg[0] &amp; ~1;  <font color="#800000">/* base of sample buf */</font>
+<a name="line3671">3671: </a>        u.u_prof[1] = u.u_arg[1];       <font color="#800000">/* size of same */</font>
+<a name="line3672">3672: </a>        u.u_prof[2] = u.u_arg[2];       <font color="#800000">/* pc offset */</font>
+<a name="line3673">3673: </a>        u.u_prof[3] = (u.u_arg[3]&gt;&gt;1) &amp; 077777; <font color="#800000">/* pc scale */</font>
+<a name="line3674">3674: </a>}
+<a name="line3675">3675: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

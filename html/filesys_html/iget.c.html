@@ -1,0 +1,256 @@
+
+<html>
+<head>
+<title>iget.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line7250">7250: </a><font color="#000000">#</font>
+<a name="line7251">7251: </a><font color="#000000">#include "../param.h"</font>
+<a name="line7252">7252: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line7253">7253: </a><font color="#000000">#include "../user.h"</font>
+<a name="line7254">7254: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line7255">7255: </a><font color="#000000">#include "../filsys.h"</font>
+<a name="line7256">7256: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line7257">7257: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line7258">7258: </a>
+<a name="line7259">7259: </a><font color="#800000">/*</font>
+<a name="line7260">7260: </a><font color="#800000"> * Look up an inode by device,inumber.</font>
+<a name="line7261">7261: </a><font color="#800000"> * If it is in core (in the inode structure),</font>
+<a name="line7262">7262: </a><font color="#800000"> * honor the locking protocol.</font>
+<a name="line7263">7263: </a><font color="#800000"> * If it is not in core, read it in from the</font>
+<a name="line7264">7264: </a><font color="#800000"> * specified device.</font>
+<a name="line7265">7265: </a><font color="#800000"> * If the inode is mounted on, perform</font>
+<a name="line7266">7266: </a><font color="#800000"> * the indicated indirection.</font>
+<a name="line7267">7267: </a><font color="#800000"> * In all cases, a pointer to a locked</font>
+<a name="line7268">7268: </a><font color="#800000"> * inode structure is returned.</font>
+<a name="line7269">7269: </a><font color="#800000"> *</font>
+<a name="line7270">7270: </a><font color="#800000"> * printf warning: no inodes -- if the inode</font>
+<a name="line7271">7271: </a><font color="#800000"> *      structure is full</font>
+<a name="line7272">7272: </a><font color="#800000"> * panic: no imt -- if the mounted file</font>
+<a name="line7273">7273: </a><font color="#800000"> *      system is not in the mount table.</font>
+<a name="line7274">7274: </a><font color="#800000"> *      "cannot happen"</font>
+<a name="line7275">7275: </a><font color="#800000"> */</font>
+<a name="line7276">7276: </a><font color="#000000"><a name="get"></a>iget(dev, ino)</font>
+<a name="line7277">7277: </a>{
+<a name="line7278">7278: </a>        register <font color="#000000">struct inode</font> *p;
+<a name="line7279">7279: </a>        register *ip2;
+<a name="line7280">7280: </a>        int *ip1;
+<a name="line7281">7281: </a>        register <font color="#000000">struct mount</font> *ip;
+<a name="line7282">7282: </a>
+<a name="line7283">7283: </a><font color="#000000">loop:</font>
+<a name="line7284">7284: </a>        ip = NULL;
+<a name="line7285">7285: </a>        <font color="#000000">for</font>(p = &amp;inode[0]; p &lt; &amp;inode[NINODE]; p++) {
+<a name="line7286">7286: </a>                <font color="#000000">if</font>(dev==p-&gt;i_dev &amp;&amp; ino==p-&gt;i_number) {
+<a name="line7287">7287: </a>                        <font color="#000000">if</font>((p-&gt;i_flag&amp;ILOCK) != 0) {
+<a name="line7288">7288: </a>                                p-&gt;i_flag =| IWANT;
+<a name="line7289">7289: </a>                                sleep(p, PINOD);
+<a name="line7290">7290: </a>                                <font color="#000000">goto</font> loop;
+<a name="line7291">7291: </a>                        }
+<a name="line7292">7292: </a>                        <font color="#000000">if</font>((p-&gt;i_flag&amp;IMOUNT) != 0) {
+<a name="line7293">7293: </a>
+<a name="line7294">7294: </a>                                <font color="#000000">for</font>(ip = &amp;mount[0]; ip &lt; &amp;mount[NMOUNT]; ip++)
+<a name="line7295">7295: </a>                                <font color="#000000">if</font>(ip-&gt;m_inodp == p) {
+<a name="line7296">7296: </a>                                        dev = ip-&gt;m_dev;
+<a name="line7297">7297: </a>                                        ino = ROOTINO;
+<a name="line7298">7298: </a>                                        <font color="#000000">goto</font> loop;
+<a name="line7299">7299: </a>                                }
+<a name="line7300">7300: </a>                                panic(<font color="#000000">"no imt"</font>);
+<a name="line7301">7301: </a>                        }
+<a name="line7302">7302: </a>                        p-&gt;i_count++;
+<a name="line7303">7303: </a>                        p-&gt;i_flag =| ILOCK;
+<a name="line7304">7304: </a>                        <font color="#000000">return</font>(p);
+<a name="line7305">7305: </a>                }
+<a name="line7306">7306: </a>                <font color="#000000">if</font>(ip==NULL &amp;&amp; p-&gt;i_count==0)
+<a name="line7307">7307: </a>                        ip = p;
+<a name="line7308">7308: </a>        }
+<a name="line7309">7309: </a>        <font color="#000000">if</font>((p=ip) == NULL) {
+<a name="line7310">7310: </a>                printf(<font color="#000000">"Inode table overflow\n"</font>);
+<a name="line7311">7311: </a>                u.u_error = ENFILE;
+<a name="line7312">7312: </a>                <font color="#000000">return</font>(NULL);
+<a name="line7313">7313: </a>        }
+<a name="line7314">7314: </a>        p-&gt;i_dev = dev;
+<a name="line7315">7315: </a>        p-&gt;i_number = ino;
+<a name="line7316">7316: </a>        p-&gt;i_flag = ILOCK;
+<a name="line7317">7317: </a>        p-&gt;i_count++;
+<a name="line7318">7318: </a>        p-&gt;i_lastr = -1;
+<a name="line7319">7319: </a>        ip = bread(dev, ldiv(ino+31,16));
+<a name="line7320">7320: </a>        <font color="#800000">/*</font>
+<a name="line7321">7321: </a><font color="#800000">         * Check I/O errors</font>
+<a name="line7322">7322: </a><font color="#800000">         */</font>
+<a name="line7323">7323: </a>        <font color="#000000">if</font> (ip-&gt;b_flags&amp;B_ERROR) {
+<a name="line7324">7324: </a>                brelse(ip);
+<a name="line7325">7325: </a>                iput(p);
+<a name="line7326">7326: </a>                <font color="#000000">return</font>(NULL);
+<a name="line7327">7327: </a>        }
+<a name="line7328">7328: </a>        ip1 = ip-&gt;b_addr + 32*lrem(ino+31, 16);
+<a name="line7329">7329: </a>        ip2 = &amp;p-&gt;i_mode;
+<a name="line7330">7330: </a>        <font color="#000000">while</font>(ip2 &lt; &amp;p-&gt;i_addr[8])
+<a name="line7331">7331: </a>                *ip2++ = *ip1++;
+<a name="line7332">7332: </a>        brelse(ip);
+<a name="line7333">7333: </a>        <font color="#000000">return</font>(p);
+<a name="line7334">7334: </a>}
+<a name="line7335">7335: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7336">7336: </a>
+<a name="line7337">7337: </a><font color="#800000">/*</font>
+<a name="line7338">7338: </a><font color="#800000"> * Decrement reference count of</font>
+<a name="line7339">7339: </a><font color="#800000"> * an inode structure.</font>
+<a name="line7340">7340: </a><font color="#800000"> * On the last reference,</font>
+<a name="line7341">7341: </a><font color="#800000"> * write the inode out and if necessary,</font>
+<a name="line7342">7342: </a><font color="#800000"> * truncate and deallocate the file.</font>
+<a name="line7343">7343: </a><font color="#800000"> */</font>
+<a name="line7344">7344: </a><font color="#000000"><a name="put"></a>iput(p)</font>
+<a name="line7345">7345: </a><font color="#000000"><a name="inode"></a>struct inode </font>*p;
+<a name="line7346">7346: </a>{
+<a name="line7347">7347: </a>        register *rp;
+<a name="line7348">7348: </a>
+<a name="line7349">7349: </a>        rp = p;
+<a name="line7350">7350: </a>        <font color="#000000">if</font>(rp-&gt;i_count == 1) {
+<a name="line7351">7351: </a>                rp-&gt;i_flag =| ILOCK;
+<a name="line7352">7352: </a>                <font color="#000000">if</font>(rp-&gt;i_nlink &lt;= 0) {
+<a name="line7353">7353: </a>                        itrunc(rp);
+<a name="line7354">7354: </a>                        rp-&gt;i_mode = 0;
+<a name="line7355">7355: </a>                        ifree(rp-&gt;i_dev, rp-&gt;i_number);
+<a name="line7356">7356: </a>                }
+<a name="line7357">7357: </a>                iupdat(rp, time);
+<a name="line7358">7358: </a>                prele(rp);
+<a name="line7359">7359: </a>                rp-&gt;i_flag = 0;
+<a name="line7360">7360: </a>                rp-&gt;i_number = 0;
+<a name="line7361">7361: </a>        }
+<a name="line7362">7362: </a>        rp-&gt;i_count--;
+<a name="line7363">7363: </a>        prele(rp);
+<a name="line7364">7364: </a>}
+<a name="line7365">7365: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7366">7366: </a>
+<a name="line7367">7367: </a><font color="#800000">/*</font>
+<a name="line7368">7368: </a><font color="#800000"> * Check accessed and update flags on</font>
+<a name="line7369">7369: </a><font color="#800000"> * an inode structure.</font>
+<a name="line7370">7370: </a><font color="#800000"> * If either is on, update the inode</font>
+<a name="line7371">7371: </a><font color="#800000"> * with the corresponding dates</font>
+<a name="line7372">7372: </a><font color="#800000"> * set to the argument tm.</font>
+<a name="line7373">7373: </a><font color="#800000"> */</font>
+<a name="line7374">7374: </a><font color="#000000"><a name="updat"></a>iupdat(p, tm)</font>
+<a name="line7375">7375: </a>int *p;
+<a name="line7376">7376: </a>int *tm;
+<a name="line7377">7377: </a>{
+<a name="line7378">7378: </a>        register *ip1, *ip2, *rp;
+<a name="line7379">7379: </a>        int *bp, i;
+<a name="line7380">7380: </a>
+<a name="line7381">7381: </a>        rp = p;
+<a name="line7382">7382: </a>        <font color="#000000">if</font>((rp-&gt;i_flag&amp;(IUPD|IACC)) != 0) {
+<a name="line7383">7383: </a>                <font color="#000000">if</font>(getfs(rp-&gt;i_dev)-&gt;s_ronly)
+<a name="line7384">7384: </a>                        <font color="#000000">return</font>;
+<a name="line7385">7385: </a>                i = rp-&gt;i_number+31;
+<a name="line7386">7386: </a>                bp = bread(rp-&gt;i_dev, ldiv(i,16));
+<a name="line7387">7387: </a>                ip1 = bp-&gt;b_addr + 32*lrem(i, 16);
+<a name="line7388">7388: </a>                ip2 = &amp;rp-&gt;i_mode;
+<a name="line7389">7389: </a>                <font color="#000000">while</font>(ip2 &lt; &amp;rp-&gt;i_addr[8])
+<a name="line7390">7390: </a>                        *ip1++ = *ip2++;
+<a name="line7391">7391: </a>                <font color="#000000">if</font>(rp-&gt;i_flag&amp;IACC) {
+<a name="line7392">7392: </a>                        *ip1++ = time[0];
+<a name="line7393">7393: </a>                        *ip1++ = time[1];
+<a name="line7394">7394: </a>                } <font color="#000000">else</font>
+<a name="line7395">7395: </a>                        ip1 =+ 2;
+<a name="line7396">7396: </a>                <font color="#000000">if</font>(rp-&gt;i_flag&amp;IUPD) {
+<a name="line7397">7397: </a>                        *ip1++ = *tm++;
+<a name="line7398">7398: </a>                        *ip1++ = *tm;
+<a name="line7399">7399: </a>                }
+<a name="line7400">7400: </a>                bwrite(bp);
+<a name="line7401">7401: </a>        }
+<a name="line7402">7402: </a>}
+<a name="line7403">7403: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7404">7404: </a>
+<a name="line7405">7405: </a><font color="#800000">/*</font>
+<a name="line7406">7406: </a><font color="#800000"> * Free all the disk blocks associated</font>
+<a name="line7407">7407: </a><font color="#800000"> * with the specified inode structure.</font>
+<a name="line7408">7408: </a><font color="#800000"> * The blocks of the file are removed</font>
+<a name="line7409">7409: </a><font color="#800000"> * in reverse order. This FILO</font>
+<a name="line7410">7410: </a><font color="#800000"> * algorithm will tend to maintain</font>
+<a name="line7411">7411: </a><font color="#800000"> * a contiguous free list much longer</font>
+<a name="line7412">7412: </a><font color="#800000"> * than FIFO.</font>
+<a name="line7413">7413: </a><font color="#800000"> */</font>
+<a name="line7414">7414: </a><font color="#000000"><a name="trunc"></a>itrunc(ip)</font>
+<a name="line7415">7415: </a>int *ip;
+<a name="line7416">7416: </a>{
+<a name="line7417">7417: </a>        register *rp, *bp, *cp;
+<a name="line7418">7418: </a>        int *dp, *ep;
+<a name="line7419">7419: </a>
+<a name="line7420">7420: </a>        rp = ip;
+<a name="line7421">7421: </a>        <font color="#000000">if</font>((rp-&gt;i_mode&amp;(IFCHR&amp;IFBLK)) != 0)
+<a name="line7422">7422: </a>                <font color="#000000">return</font>;
+<a name="line7423">7423: </a>        <font color="#000000">for</font>(ip = &amp;rp-&gt;i_addr[7]; ip &gt;= &amp;rp-&gt;i_addr[0]; ip--)
+<a name="line7424">7424: </a>        <font color="#000000">if</font>(*ip) {
+<a name="line7425">7425: </a>                <font color="#000000">if</font>((rp-&gt;i_mode&amp;ILARG) != 0) {
+<a name="line7426">7426: </a>                        bp = bread(rp-&gt;i_dev, *ip);
+<a name="line7427">7427: </a>
+<a name="line7428">7428: </a>                        <font color="#000000">for</font>(cp = bp-&gt;b_addr+512; cp &gt;= bp-&gt;b_addr; cp--)
+<a name="line7429">7429: </a>                        <font color="#000000">if</font>(*cp) {
+<a name="line7430">7430: </a>                                <font color="#000000">if</font>(ip == &amp;rp-&gt;i_addr[7]) {
+<a name="line7431">7431: </a>                                        dp = bread(rp-&gt;i_dev, *cp);
+<a name="line7432">7432: </a>
+<a name="line7433">7433: </a>                                        <font color="#000000">for</font>(ep = dp-&gt;b_addr+512; ep &gt;= dp-&gt;b_addr; ep--)
+<a name="line7434">7434: </a>                                        <font color="#000000">if</font>(*ep)
+<a name="line7435">7435: </a>                                                free(rp-&gt;i_dev, *ep);
+<a name="line7436">7436: </a>                                        brelse(dp);
+<a name="line7437">7437: </a>                                }
+<a name="line7438">7438: </a>                                free(rp-&gt;i_dev, *cp);
+<a name="line7439">7439: </a>                        }
+<a name="line7440">7440: </a>                        brelse(bp);
+<a name="line7441">7441: </a>                }
+<a name="line7442">7442: </a>                free(rp-&gt;i_dev, *ip);
+<a name="line7443">7443: </a>                *ip = 0;
+<a name="line7444">7444: </a>        }
+<a name="line7445">7445: </a>        rp-&gt;i_mode =&amp; ~ILARG;
+<a name="line7446">7446: </a>        rp-&gt;i_size0 = 0;
+<a name="line7447">7447: </a>        rp-&gt;i_size1 = 0;
+<a name="line7448">7448: </a>        rp-&gt;i_flag =| IUPD;
+<a name="line7449">7449: </a>}
+<a name="line7450">7450: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7451">7451: </a>
+<a name="line7452">7452: </a><font color="#800000">/*</font>
+<a name="line7453">7453: </a><font color="#800000"> * Make a new file.</font>
+<a name="line7454">7454: </a><font color="#800000"> */</font>
+<a name="line7455">7455: </a><font color="#000000"><a name="aknode"></a>maknode(mode)</font>
+<a name="line7456">7456: </a>{
+<a name="line7457">7457: </a>        register *ip;
+<a name="line7458">7458: </a>
+<a name="line7459">7459: </a>        ip = ialloc(u.u_pdir-&gt;i_dev);
+<a name="line7460">7460: </a>        <font color="#000000">if</font> (ip==NULL)
+<a name="line7461">7461: </a>                <font color="#000000">return</font>(NULL);
+<a name="line7462">7462: </a>        ip-&gt;i_flag =| IACC|IUPD;
+<a name="line7463">7463: </a>        ip-&gt;i_mode = mode|IALLOC;
+<a name="line7464">7464: </a>        ip-&gt;i_nlink = 1;
+<a name="line7465">7465: </a>        ip-&gt;i_uid = u.u_uid;
+<a name="line7466">7466: </a>        ip-&gt;i_gid = u.u_gid;
+<a name="line7467">7467: </a>        wdir(ip);
+<a name="line7468">7468: </a>        <font color="#000000">return</font>(ip);
+<a name="line7469">7469: </a>}
+<a name="line7470">7470: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7471">7471: </a>
+<a name="line7472">7472: </a><font color="#800000">/*</font>
+<a name="line7473">7473: </a><font color="#800000"> * Write a directory entry with</font>
+<a name="line7474">7474: </a><font color="#800000"> * parameters left as side effects</font>
+<a name="line7475">7475: </a><font color="#800000"> * to a call to namei.</font>
+<a name="line7476">7476: </a><font color="#800000"> */</font>
+<a name="line7477">7477: </a><font color="#000000"><a name="dir"></a>wdir(ip)</font>
+<a name="line7478">7478: </a>int *ip;
+<a name="line7479">7479: </a>{
+<a name="line7480">7480: </a>        register char *cp1, *cp2;
+<a name="line7481">7481: </a>
+<a name="line7482">7482: </a>        u.u_dent.u_ino = ip-&gt;i_number;
+<a name="line7483">7483: </a>        cp1 = &amp;u.u_dent.u_name[0];
+<a name="line7484">7484: </a>        <font color="#000000">for</font>(cp2 = &amp;u.u_dbuf[0]; cp2 &lt; &amp;u.u_dbuf[DIRSIZ];)
+<a name="line7485">7485: </a>                *cp1++ = *cp2++;
+<a name="line7486">7486: </a>        u.u_count = DIRSIZ+2;
+<a name="line7487">7487: </a>        u.u_segflg = 1;
+<a name="line7488">7488: </a>        u.u_base = &amp;u.u_dent;
+<a name="line7489">7489: </a>        writei(u.u_pdir);
+<a name="line7490">7490: </a>        iput(u.u_pdir);
+<a name="line7491">7491: </a>}
+<a name="line7492">7492: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

@@ -1,0 +1,162 @@
+
+<html>
+<head>
+<title>text.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4350">4350: </a><font color="#000000">#</font>
+<a name="line4351">4351: </a><font color="#000000">#include "../param.h"</font>
+<a name="line4352">4352: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line4353">4353: </a><font color="#000000">#include "../user.h"</font>
+<a name="line4354">4354: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line4355">4355: </a><font color="#000000">#include "../text.h"</font>
+<a name="line4356">4356: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line4357">4357: </a>
+<a name="line4358">4358: </a><font color="#800000">/* Swap out process p.</font>
+<a name="line4359">4359: </a><font color="#800000"> * The ff flag causes its core to be freed--</font>
+<a name="line4360">4360: </a><font color="#800000"> * it may be off when called to create an image for a</font>
+<a name="line4361">4361: </a><font color="#800000"> * child process in newproc.</font>
+<a name="line4362">4362: </a><font color="#800000"> * Os is the old size of the data area of the process,</font>
+<a name="line4363">4363: </a><font color="#800000"> * and is supplied during core expansion swaps.</font>
+<a name="line4364">4364: </a><font color="#800000"> *</font>
+<a name="line4365">4365: </a><font color="#800000"> * panic: out of swap space</font>
+<a name="line4366">4366: </a><font color="#800000"> * panic: swap error -- IO error</font>
+<a name="line4367">4367: </a><font color="#800000"> */</font>
+<a name="line4368">4368: </a><font color="#000000"><a name="swap"></a>xswap(p, ff, os)</font>
+<a name="line4369">4369: </a>int *p;
+<a name="line4370">4370: </a>{       register *rp, a;
+<a name="line4371">4371: </a>
+<a name="line4372">4372: </a>        rp = p;
+<a name="line4373">4373: </a>        <font color="#000000">if</font>(os == 0)
+<a name="line4374">4374: </a>                os = rp-&gt;p_size;
+<a name="line4375">4375: </a>        a = malloc(swapmap, (rp-&gt;p_size+7)/8);
+<a name="line4376">4376: </a>        <font color="#000000">if</font>(a == NULL)
+<a name="line4377">4377: </a>                panic(<font color="#000000">"out of swap space"</font>);
+<a name="line4378">4378: </a>        xccdec(rp-&gt;p_textp);
+<a name="line4379">4379: </a>        rp-&gt;p_flag =| SLOCK;
+<a name="line4380">4380: </a>        <font color="#000000">if</font>(swap(a, rp-&gt;p_addr, os, 0))
+<a name="line4381">4381: </a>                panic(<font color="#000000">"swap error"</font>);
+<a name="line4382">4382: </a>        <font color="#000000">if</font>(ff)
+<a name="line4383">4383: </a>                mfree(coremap, os, rp-&gt;p_addr);
+<a name="line4384">4384: </a>        rp-&gt;p_addr = a;
+<a name="line4385">4385: </a>        rp-&gt;p_flag =&amp; ~(SLOAD|SLOCK);
+<a name="line4386">4386: </a>        rp-&gt;p_time = 0;
+<a name="line4387">4387: </a>        <font color="#000000">if</font>(runout) {
+<a name="line4388">4388: </a>                runout = 0;
+<a name="line4389">4389: </a>                wakeup(&amp;runout);
+<a name="line4390">4390: </a>        }
+<a name="line4391">4391: </a>}
+<a name="line4392">4392: </a>* ---------------------------       */
+<a name="line4393">4393: </a>
+<a name="line4394">4394: </a><font color="#800000">/*</font>
+<a name="line4395">4395: </a><font color="#800000"> * relinquish use of the shared text segment</font>
+<a name="line4396">4396: </a><font color="#800000"> * of a process.</font>
+<a name="line4397">4397: </a><font color="#800000"> */</font>
+<a name="line4398">4398: </a><font color="#000000"><a name="free"></a>xfree()</font>
+<a name="line4399">4399: </a>{
+<a name="line4400">4400: </a>        register *xp, *ip;
+<a name="line4401">4401: </a>
+<a name="line4402">4402: </a>        <font color="#000000">if</font>((xp=u.u_procp-&gt;p_textp) != NULL) {
+<a name="line4403">4403: </a>                u.u_procp-&gt;p_textp = NULL;
+<a name="line4404">4404: </a>                xccdec(xp);
+<a name="line4405">4405: </a>                <font color="#000000">if</font>(--xp-&gt;x_count == 0) {
+<a name="line4406">4406: </a>                        ip = xp-&gt;x_iptr;
+<a name="line4407">4407: </a>                        <font color="#000000">if</font>((ip-&gt;i_mode&amp;ISVTX) == 0) {
+<a name="line4408">4408: </a>                                xp-&gt;x_iptr = NULL;
+<a name="line4409">4409: </a>                                mfree(swapmap, (xp-&gt;x_size+7)/8, xp-&gt;x_daddr);
+<a name="line4410">4410: </a>                                ip-&gt;i_flag =&amp; ~ITEXT;
+<a name="line4411">4411: </a>                                iput(ip);
+<a name="line4412">4412: </a>                        }
+<a name="line4413">4413: </a>                }
+<a name="line4414">4414: </a>        }
+<a name="line4415">4415: </a>}
+<a name="line4416">4416: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4417">4417: </a>
+<a name="line4418">4418: </a><font color="#800000">/* Attach to a shared text segment.</font>
+<a name="line4419">4419: </a><font color="#800000"> * If there is no shared text, just return.</font>
+<a name="line4420">4420: </a><font color="#800000"> * If there is, hook up to it:</font>
+<a name="line4421">4421: </a><font color="#800000"> * if it is not currently being used, it has to be read</font>
+<a name="line4422">4422: </a><font color="#800000"> * in from the inode (ip) and established in the swap space.</font>
+<a name="line4423">4423: </a><font color="#800000"> * If it is being used, but is not currently in core,</font>
+<a name="line4424">4424: </a><font color="#800000"> * a swap has to be done to get it back.</font>
+<a name="line4425">4425: </a><font color="#800000"> * The full coroutine glory has to be invoked--</font>
+<a name="line4426">4426: </a><font color="#800000"> * see slp.c-- because if the calling process</font>
+<a name="line4427">4427: </a><font color="#800000"> * is misplaced in core the text image might not fit.</font>
+<a name="line4428">4428: </a><font color="#800000"> * Quite possibly the code after "out:" could check to</font>
+<a name="line4429">4429: </a><font color="#800000"> * see if the text does fit and simply swap it in.</font>
+<a name="line4430">4430: </a><font color="#800000"> *</font>
+<a name="line4431">4431: </a><font color="#800000"> * panic: out of swap space</font>
+<a name="line4432">4432: </a><font color="#800000"> */</font>
+<a name="line4433">4433: </a><font color="#000000"><a name="alloc"></a>xalloc(ip)</font>
+<a name="line4434">4434: </a>int *ip;
+<a name="line4435">4435: </a>{
+<a name="line4436">4436: </a>        register <font color="#000000">struct text</font> *xp;
+<a name="line4437">4437: </a>        register *rp, ts;
+<a name="line4438">4438: </a>
+<a name="line4439">4439: </a>        <font color="#000000">if</font>(u.u_arg[1] == 0) <font color="#000000">return</font>;
+<a name="line4440">4440: </a>        rp = NULL;
+<a name="line4441">4441: </a>        <font color="#000000">for</font>(xp = &amp;text[0]; xp &lt; &amp;text[NTEXT]; xp++)
+<a name="line4442">4442: </a>                <font color="#000000">if</font>(xp-&gt;x_iptr == NULL) {
+<a name="line4443">4443: </a>                        <font color="#000000">if</font>(rp == NULL)
+<a name="line4444">4444: </a>                                rp = xp;
+<a name="line4445">4445: </a>                } <font color="#000000">else</font>
+<a name="line4446">4446: </a>                        <font color="#000000">if</font>(xp-&gt;x_iptr == ip) {
+<a name="line4447">4447: </a>                                xp-&gt;x_count++;
+<a name="line4448">4448: </a>                                u.u_procp-&gt;p_textp = xp;
+<a name="line4449">4449: </a>                                <font color="#000000">goto</font> out;
+<a name="line4450">4450: </a>                        }
+<a name="line4451">4451: </a>        <font color="#000000">if</font>((xp=rp) == NULL) panic(<font color="#000000">"out of text"</font>);
+<a name="line4452">4452: </a>        xp-&gt;x_count = 1;
+<a name="line4453">4453: </a>        xp-&gt;x_ccount = 0;
+<a name="line4454">4454: </a>        xp-&gt;x_iptr = ip;
+<a name="line4455">4455: </a>        ts = ((u.u_arg[1]+63)&gt;&gt;6) &amp; 01777;
+<a name="line4456">4456: </a>        xp-&gt;x_size = ts;
+<a name="line4457">4457: </a>        <font color="#000000">if</font>((xp-&gt;x_daddr = malloc(swapmap, (ts+7)/8)) == NULL)
+<a name="line4458">4458: </a>                panic(<font color="#000000">"out of swap space"</font>);
+<a name="line4459">4459: </a>        expand(USIZE+ts);
+<a name="line4460">4460: </a>        estabur(0, ts, 0, 0);
+<a name="line4461">4461: </a>        u.u_count = u.u_arg[1];
+<a name="line4462">4462: </a>        u.u_offset[1] = 020;
+<a name="line4463">4463: </a>        u.u_base = 0;
+<a name="line4464">4464: </a>        readi(ip);
+<a name="line4465">4465: </a>        rp = u.u_procp;
+<a name="line4466">4466: </a>        rp-&gt;p_flag =| SLOCK;
+<a name="line4467">4467: </a>        swap(xp-&gt;x_daddr, rp-&gt;p_addr+USIZE, ts, 0);
+<a name="line4468">4468: </a>        rp-&gt;p_flag =&amp; ~SLOCK;
+<a name="line4469">4469: </a>        rp-&gt;p_textp = xp;
+<a name="line4470">4470: </a>        rp = ip;
+<a name="line4471">4471: </a>        rp-&gt;i_flag =| ITEXT;
+<a name="line4472">4472: </a>        rp-&gt;i_count++;
+<a name="line4473">4473: </a>        expand(USIZE);
+<a name="line4474">4474: </a><font color="#000000">out:</font>
+<a name="line4475">4475: </a>        <font color="#000000">if</font>(xp-&gt;x_ccount == 0) {
+<a name="line4476">4476: </a>                savu(u.u_rsav);
+<a name="line4477">4477: </a>                savu(u.u_ssav);
+<a name="line4478">4478: </a>                xswap(u.u_procp, 1, 0);
+<a name="line4479">4479: </a>                u.u_procp-&gt;p_flag =| SSWAP;
+<a name="line4480">4480: </a>                swtch();
+<a name="line4481">4481: </a>                <font color="#800000">/* no return */</font>
+<a name="line4482">4482: </a>        }
+<a name="line4483">4483: </a>        xp-&gt;x_ccount++;
+<a name="line4484">4484: </a>}
+<a name="line4485">4485: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4486">4486: </a>
+<a name="line4487">4487: </a><font color="#800000">/* Decrement the in-core usage count of a shared text segment.</font>
+<a name="line4488">4488: </a><font color="#800000"> * When it drops to zero, free the core space.</font>
+<a name="line4489">4489: </a><font color="#800000"> */</font>
+<a name="line4490">4490: </a><font color="#000000"><a name="ccdec"></a>xccdec(xp)</font>
+<a name="line4491">4491: </a>int *xp;
+<a name="line4492">4492: </a>{
+<a name="line4493">4493: </a>        register *rp;
+<a name="line4494">4494: </a>
+<a name="line4495">4495: </a>        <font color="#000000">if</font>((rp=xp)!=NULL &amp;&amp; rp-&gt;x_ccount!=0)
+<a name="line4496">4496: </a>                <font color="#000000">if</font>(--rp-&gt;x_ccount == 0)
+<a name="line4497">4497: </a>                        mfree(coremap, rp-&gt;x_size, rp-&gt;x_caddr);
+<a name="line4498">4498: </a>}
+</pre>
+</body>
+
+</html>

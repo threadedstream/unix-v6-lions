@@ -1,0 +1,62 @@
+
+<html>
+<head>
+<title>conf.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4650">4650: </a>
+<a name="line4651">4651: </a>
+<a name="line4652">4652: </a>
+<a name="line4653">4653: </a>
+<a name="line4654">4654: </a>
+<a name="line4655">4655: </a>
+<a name="line4656">4656: </a><font color="#000000"><a name="nt"></a>int     (*bdevsw[])()</font>
+<a name="line4657">4657: </a>{
+<a name="line4658">4658: </a>        &amp;nulldev,       &amp;nulldev,       &amp;rkstrategy,    &amp;rktab, <font color="#800000">/* rk */</font>
+<a name="line4659">4659: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* rp */</font>
+<a name="line4660">4660: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* rf */</font>
+<a name="line4661">4661: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* tm */</font>
+<a name="line4662">4662: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* tc */</font>
+<a name="line4663">4663: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* hs */</font>
+<a name="line4664">4664: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* hp */</font>
+<a name="line4665">4665: </a>        &amp;nodev,         &amp;nodev,         &amp;nodev,         0,      <font color="#800000">/* ht */</font>
+<a name="line4666">4666: </a>        0
+<a name="line4667">4667: </a>};
+<a name="line4668">4668: </a>
+<a name="line4669">4669: </a><font color="#000000"><a name="nt"></a>int     (*cdevsw[])()</font>
+<a name="line4670">4670: </a>{
+<a name="line4671">4671: </a>        &amp;klopen,   &amp;klclose,  &amp;klread,   &amp;klwrite,  &amp;klsgtty,   <font color="#800000">/* console */</font>
+<a name="line4672">4672: </a>
+<a name="line4673">4673: </a>        &amp;pcopen,   &amp;pcclose,  &amp;pcread,   &amp;pcwrite,  &amp;nodev,     <font color="#800000">/* pc */</font>
+<a name="line4674">4674: </a>
+<a name="line4675">4675: </a>        &amp;lpopen,   &amp;lpclose,  &amp;lpread,   &amp;lpwrite,  &amp;nodev,     <font color="#800000">/* lp */</font>
+<a name="line4676">4676: </a>
+<a name="line4677">4677: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* dc */</font>
+<a name="line4678">4678: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* dh */</font>
+<a name="line4679">4679: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* dp */</font>
+<a name="line4680">4680: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* dj */</font>
+<a name="line4681">4681: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* dn */</font>
+<a name="line4682">4682: </a>        &amp;nulldev,  &amp;nulldev,  &amp;mmread,   &amp;mmwrite,  &amp;nodev,     <font color="#800000">/* mem */</font>
+<a name="line4683">4683: </a>
+<a name="line4684">4684: </a>        &amp;nulldev,  &amp;nulldev,  &amp;rkread,   &amp;rkwrite,  &amp;nodev,     <font color="#800000">/* rk */</font>
+<a name="line4685">4685: </a>
+<a name="line4686">4686: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* rf */</font>
+<a name="line4687">4687: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* rp */</font>
+<a name="line4688">4688: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* tm */</font>
+<a name="line4689">4689: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* hs */</font>
+<a name="line4690">4690: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* hp */</font>
+<a name="line4691">4691: </a>        &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,    &amp;nodev,     <font color="#800000">/* ht */</font>
+<a name="line4692">4692: </a>        0
+<a name="line4693">4693: </a>};
+<a name="line4694">4694: </a>
+<a name="line4695">4695: </a>int     rootdev {(0&lt;&lt;8)|0};
+<a name="line4696">4696: </a>int     swapdev {(0&lt;&lt;8)|0};
+<a name="line4697">4697: </a>int     swplo   4000;   <font color="#800000">/* cannot be zero */</font>
+<a name="line4698">4698: </a>int     nswap   872;
+</pre>
+</body>
+
+</html>

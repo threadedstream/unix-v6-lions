@@ -1,0 +1,91 @@
+
+<html>
+<head>
+<title>sysent.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line2900">2900: </a><font color="#000000">#</font>
+<a name="line2901">2901: </a><font color="#800000">/*</font>
+<a name="line2902">2902: </a><font color="#800000"> */</font>
+<a name="line2903">2903: </a>
+<a name="line2904">2904: </a><font color="#800000">/*</font>
+<a name="line2905">2905: </a><font color="#800000"> * This table is the switch used to transfer</font>
+<a name="line2906">2906: </a><font color="#800000"> * to the appropriate routine for processing a system call.</font>
+<a name="line2907">2907: </a><font color="#800000"> * Each row contains the number of arguments expected</font>
+<a name="line2908">2908: </a><font color="#800000"> * and a pointer to the routine.</font>
+<a name="line2909">2909: </a><font color="#800000"> */</font>
+<a name="line2910">2910: </a>int     sysent[]
+<a name="line2911">2911: </a>{
+<a name="line2912">2912: </a>        0, &amp;nullsys,                    <font color="#800000">/*  0 = indir */</font>
+<a name="line2913">2913: </a>        0, &amp;rexit,                      <font color="#800000">/*  1 = exit */</font>
+<a name="line2914">2914: </a>        0, &amp;fork,                       <font color="#800000">/*  2 = fork */</font>
+<a name="line2915">2915: </a>        2, &amp;read,                       <font color="#800000">/*  3 = read */</font>
+<a name="line2916">2916: </a>        2, &amp;write,                      <font color="#800000">/*  4 = write */</font>
+<a name="line2917">2917: </a>        2, &amp;open,                       <font color="#800000">/*  5 = open */</font>
+<a name="line2918">2918: </a>        0, &amp;close,                      <font color="#800000">/*  6 = close */</font>
+<a name="line2919">2919: </a>        0, &amp;wait,                       <font color="#800000">/*  7 = wait */</font>
+<a name="line2920">2920: </a>        2, &amp;creat,                      <font color="#800000">/*  8 = creat */</font>
+<a name="line2921">2921: </a>        2, &amp;link,                       <font color="#800000">/*  9 = link */</font>
+<a name="line2922">2922: </a>        1, &amp;unlink,                     <font color="#800000">/* 10 = unlink */</font>
+<a name="line2923">2923: </a>        2, &amp;exec,                       <font color="#800000">/* 11 = exec */</font>
+<a name="line2924">2924: </a>        1, &amp;chdir,                      <font color="#800000">/* 12 = chdir */</font>
+<a name="line2925">2925: </a>        0, &amp;gtime,                      <font color="#800000">/* 13 = time */</font>
+<a name="line2926">2926: </a>        3, &amp;mknod,                      <font color="#800000">/* 14 = mknod */</font>
+<a name="line2927">2927: </a>        2, &amp;chmod,                      <font color="#800000">/* 15 = chmod */</font>
+<a name="line2928">2928: </a>        2, &amp;chown,                      <font color="#800000">/* 16 = chown */</font>
+<a name="line2929">2929: </a>        1, &amp;sbreak,                     <font color="#800000">/* 17 = break */</font>
+<a name="line2930">2930: </a>        2, &amp;stat,                       <font color="#800000">/* 18 = stat */</font>
+<a name="line2931">2931: </a>        2, &amp;seek,                       <font color="#800000">/* 19 = seek */</font>
+<a name="line2932">2932: </a>        0, &amp;getpid,                     <font color="#800000">/* 20 = getpid */</font>
+<a name="line2933">2933: </a>        3, &amp;smount,                     <font color="#800000">/* 21 = mount */</font>
+<a name="line2934">2934: </a>        1, &amp;sumount,                    <font color="#800000">/* 22 = umount */</font>
+<a name="line2935">2935: </a>        0, &amp;setuid,                     <font color="#800000">/* 23 = setuid */</font>
+<a name="line2936">2936: </a>        0, &amp;getuid,                     <font color="#800000">/* 24 = getuid */</font>
+<a name="line2937">2937: </a>        0, &amp;stime,                      <font color="#800000">/* 25 = stime */</font>
+<a name="line2938">2938: </a>        3, &amp;ptrace,                     <font color="#800000">/* 26 = ptrace */</font>
+<a name="line2939">2939: </a>        0, &amp;nosys,                      <font color="#800000">/* 27 = x */</font>
+<a name="line2940">2940: </a>        1, &amp;fstat,                      <font color="#800000">/* 28 = fstat */</font>
+<a name="line2941">2941: </a>        0, &amp;nosys,                      <font color="#800000">/* 29 = x */</font>
+<a name="line2942">2942: </a>        1, &amp;nullsys,                    <font color="#800000">/* 30 = smdate; inoperative */</font>
+<a name="line2943">2943: </a>        1, &amp;stty,                       <font color="#800000">/* 31 = stty */</font>
+<a name="line2944">2944: </a>        1, &amp;gtty,                       <font color="#800000">/* 32 = gtty */</font>
+<a name="line2945">2945: </a>        0, &amp;nosys,                      <font color="#800000">/* 33 = x */</font>
+<a name="line2946">2946: </a>        0, &amp;nice,                       <font color="#800000">/* 34 = nice */</font>
+<a name="line2947">2947: </a>        0, &amp;sslep,                      <font color="#800000">/* 35 = sleep */</font>
+<a name="line2948">2948: </a>        0, &amp;sync,                       <font color="#800000">/* 36 = sync */</font>
+<a name="line2949">2949: </a>        1, &amp;kill,                       <font color="#800000">/* 37 = kill */</font>
+<a name="line2950">2950: </a>        0, &amp;getswit,                    <font color="#800000">/* 38 = switch */</font>
+<a name="line2951">2951: </a>        0, &amp;nosys,                      <font color="#800000">/* 39 = x */</font>
+<a name="line2952">2952: </a>        0, &amp;nosys,                      <font color="#800000">/* 40 = x */</font>
+<a name="line2953">2953: </a>        0, &amp;dup,                        <font color="#800000">/* 41 = dup */</font>
+<a name="line2954">2954: </a>        0, &amp;pipe,                       <font color="#800000">/* 42 = pipe */</font>
+<a name="line2955">2955: </a>        1, &amp;times,                      <font color="#800000">/* 43 = times */</font>
+<a name="line2956">2956: </a>        4, &amp;profil,                     <font color="#800000">/* 44 = prof */</font>
+<a name="line2957">2957: </a>        0, &amp;nosys,                      <font color="#800000">/* 45 = tiu */</font>
+<a name="line2958">2958: </a>        0, &amp;setgid,                     <font color="#800000">/* 46 = setgid */</font>
+<a name="line2959">2959: </a>        0, &amp;getgid,                     <font color="#800000">/* 47 = getgid */</font>
+<a name="line2960">2960: </a>        2, &amp;ssig,                       <font color="#800000">/* 48 = sig */</font>
+<a name="line2961">2961: </a>        0, &amp;nosys,                      <font color="#800000">/* 49 = x */</font>
+<a name="line2962">2962: </a>        0, &amp;nosys,                      <font color="#800000">/* 50 = x */</font>
+<a name="line2963">2963: </a>        0, &amp;nosys,                      <font color="#800000">/* 51 = x */</font>
+<a name="line2964">2964: </a>        0, &amp;nosys,                      <font color="#800000">/* 52 = x */</font>
+<a name="line2965">2965: </a>        0, &amp;nosys,                      <font color="#800000">/* 53 = x */</font>
+<a name="line2966">2966: </a>        0, &amp;nosys,                      <font color="#800000">/* 54 = x */</font>
+<a name="line2967">2967: </a>        0, &amp;nosys,                      <font color="#800000">/* 55 = x */</font>
+<a name="line2968">2968: </a>        0, &amp;nosys,                      <font color="#800000">/* 56 = x */</font>
+<a name="line2969">2969: </a>        0, &amp;nosys,                      <font color="#800000">/* 57 = x */</font>
+<a name="line2970">2970: </a>        0, &amp;nosys,                      <font color="#800000">/* 58 = x */</font>
+<a name="line2971">2971: </a>        0, &amp;nosys,                      <font color="#800000">/* 59 = x */</font>
+<a name="line2972">2972: </a>        0, &amp;nosys,                      <font color="#800000">/* 60 = x */</font>
+<a name="line2973">2973: </a>        0, &amp;nosys,                      <font color="#800000">/* 61 = x */</font>
+<a name="line2974">2974: </a>        0, &amp;nosys,                      <font color="#800000">/* 62 = x */</font>
+<a name="line2975">2975: </a>        0, &amp;nosys                       <font color="#800000">/* 63 = x */</font>
+<a name="line2976">2976: </a>};
+<a name="line2977">2977: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

@@ -1,0 +1,91 @@
+
+<html>
+<head>
+<title>low.s</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line500">0500: </a>/ low core
+<a name="line501">0501: </a>
+<a name="line502">0502: </a>br4 = 200
+<a name="line503">0503: </a>br5 = 240
+<a name="line504">0504: </a>br6 = 300
+<a name="line505">0505: </a>br7 = 340
+<a name="line506">0506: </a>
+<a name="line507">0507: </a>. = 0^.
+<a name="line508">0508: </a>        br      1f
+<a name="line509">0509: </a>        4
+<a name="line510">0510: </a>
+<a name="line511">0511: </a>/ trap vectors
+<a name="line512">0512: </a>        trap; br7+0.            / bus error
+<a name="line513">0513: </a>        trap; br7+1.            / illegal instruction
+<a name="line514">0514: </a>        trap; br7+2.            / bpt-trace trap
+<a name="line515">0515: </a>        trap; br7+3.            / iot trap
+<a name="line516">0516: </a>        trap; br7+4.            / power fail
+<a name="line517">0517: </a>        trap; br7+5.            / emulator trap
+<a name="line518">0518: </a>        trap; br7+6.            / system entry
+<a name="line519">0519: </a>
+<a name="line520">0520: </a>. = 40^.
+<a name="line521">0521: </a>.globl  start, dump
+<a name="line522">0522: </a>1:      jmp     start
+<a name="line523">0523: </a>        jmp     dump
+<a name="line524">0524: </a>
+<a name="line525">0525: </a>. = 60^.
+<a name="line526">0526: </a>        klin; br4
+<a name="line527">0527: </a>        klou; br4
+<a name="line528">0528: </a>
+<a name="line529">0529: </a>. = 70^.
+<a name="line530">0530: </a>        pcin; br4
+<a name="line531">0531: </a>        pcou; br4
+<a name="line532">0532: </a>
+<a name="line533">0533: </a>. = 100^.
+<a name="line534">0534: </a>        kwlp; br6
+<a name="line535">0535: </a>        kwlp; br6
+<a name="line536">0536: </a>
+<a name="line537">0537: </a>. = 114^.
+<a name="line538">0538: </a>        trap; br7+7.            / 11/70 parity
+<a name="line539">0539: </a>
+<a name="line540">0540: </a>. = 200^.
+<a name="line541">0541: </a>        lpou; br4
+<a name="line542">0542: </a>
+<a name="line543">0543: </a>. = 220^.
+<a name="line544">0544: </a>        rkio; br5
+<a name="line545">0545: </a>
+<a name="line546">0546: </a>. = 240^.
+<a name="line547">0547: </a>        trap; br7+7.            / programmed interrupt
+<a name="line548">0548: </a>        trap; br7+8.            / floating point
+<a name="line549">0549: </a>        trap; br7+9.            / segmentation violation
+<a name="line550">0550: </a>
+<a name="line551">0551: </a>//////////////////////////////////////////////////////
+<a name="line552">0552: </a>/               interface code to C
+<a name="line553">0553: </a>//////////////////////////////////////////////////////
+<a name="line554">0554: </a>
+<a name="line555">0555: </a>.globl  call, trap
+<a name="line556">0556: </a>
+<a name="line557">0557: </a>.globl  _klrint
+<a name="line558">0558: </a><font color="#000000">klin:</font>   jsr     r0,call; _klrint
+<a name="line559">0559: </a>
+<a name="line560">0560: </a>.globl  _klxint
+<a name="line561">0561: </a><font color="#000000">klou:</font>   jsr     r0,call; _klxint
+<a name="line562">0562: </a>
+<a name="line563">0563: </a>.globl  _pcrint
+<a name="line564">0564: </a><font color="#000000">pcin:</font>   jsr     r0,call; _pcrint
+<a name="line565">0565: </a>
+<a name="line566">0566: </a>.globl  _pcpint
+<a name="line567">0567: </a><font color="#000000">pcou:</font>   jsr     r0,call; _pcpint
+<a name="line568">0568: </a>
+<a name="line569">0569: </a>.globl  _clock
+<a name="line570">0570: </a><font color="#000000">kwlp:</font>   jsr     r0,call; _clock
+<a name="line571">0571: </a>
+<a name="line572">0572: </a>
+<a name="line573">0573: </a>.globl  _lpintr
+<a name="line574">0574: </a><font color="#000000">lpou:</font>   jsr     r0,call; _lpintr
+<a name="line575">0575: </a>
+<a name="line576">0576: </a>.globl  _rkintr
+<a name="line577">0577: </a><font color="#000000">rkio:</font>   jsr     r0,call; _rkintr
+</pre>
+</body>
+
+</html>

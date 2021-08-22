@@ -1,0 +1,511 @@
+
+<html>
+<head>
+<title>tty.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line8100">8100: </a><font color="#000000">#   / * general TTY subroutines */</font>
+<a name="line8101">8101: </a>
+<a name="line8102">8102: </a><font color="#000000">#include "../param.h"</font>
+<a name="line8103">8103: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line8104">8104: </a><font color="#000000">#include "../user.h"</font>
+<a name="line8105">8105: </a><font color="#000000">#include "../tty.h"</font>
+<a name="line8106">8106: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line8107">8107: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line8108">8108: </a><font color="#000000">#include "../file.h"</font>
+<a name="line8109">8109: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line8110">8110: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line8111">8111: </a>
+<a name="line8112">8112: </a><font color="#800000">/* Input mapping table-- if an entry is non-zero, when the</font>
+<a name="line8113">8113: </a><font color="#800000"> * corresponding character is typed preceded by "\" the escape</font>
+<a name="line8114">8114: </a><font color="#800000"> * sequence is replaced by the table value.  Mostly used for</font>
+<a name="line8115">8115: </a><font color="#800000"> * upper-case only terminals.</font>
+<a name="line8116">8116: </a><font color="#800000"> */</font>
+<a name="line8117">8117: </a>char    maptab[]
+<a name="line8118">8118: </a>{
+<a name="line8119">8119: </a>        000,000,000,000,004,000,000,000,
+<a name="line8120">8120: </a>        000,000,000,000,000,000,000,000,
+<a name="line8121">8121: </a>        000,000,000,000,000,000,000,000,
+<a name="line8122">8122: </a>        000,000,000,000,000,000,000,000,
+<a name="line8123">8123: </a>        000,'|',000,'#',000,000,000,'`',
+<a name="line8124">8124: </a>        '{','}',000,000,000,000,000,000,
+<a name="line8125">8125: </a>        000,000,000,000,000,000,000,000,
+<a name="line8126">8126: </a>        000,000,000,000,000,000,000,000,
+<a name="line8127">8127: </a>        '@',000,000,000,000,000,000,000,
+<a name="line8128">8128: </a>        000,000,000,000,000,000,000,000,
+<a name="line8129">8129: </a>        000,000,000,000,000,000,000,000,
+<a name="line8130">8130: </a>        000,000,000,000,000,000,'~',000,
+<a name="line8131">8131: </a>        000,'A','B','C','D','E','F','G',
+<a name="line8132">8132: </a>        'H','I','J','K','L','M','N','O',
+<a name="line8133">8133: </a>        'P','Q','R','S','T','U','V','W',
+<a name="line8134">8134: </a>        'X','Y','Z',000,000,000,000,000,
+<a name="line8135">8135: </a>};
+<a name="line8136">8136: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8137">8137: </a><font color="#800000">/* The actual structure of a clist block manipulated by</font>
+<a name="line8138">8138: </a><font color="#800000"> * getc and putc (mch.s)</font>
+<a name="line8139">8139: </a><font color="#800000"> */</font>
+<a name="line8140">8140: </a><font color="#000000"><a name="cblock"></a>struct cblock </font>{
+<a name="line8141">8141: </a>        <font color="#000000">struct cblock</font> *c_next;
+<a name="line8142">8142: </a>        char info[6];
+<a name="line8143">8143: </a>};
+<a name="line8144">8144: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8145">8145: </a><font color="#800000">/* The character lists-- space for 6*NCLIST characters */</font>
+<a name="line8146">8146: </a><font color="#000000"><a name="cblock"></a>struct cblock </font>cfree[NCLIST];
+<a name="line8147">8147: </a><font color="#800000">/* List head for unused character blocks. */</font>
+<a name="line8148">8148: </a><font color="#000000"><a name="cblock"></a>struct cblock </font>*cfreelist;
+<a name="line8149">8149: </a>
+<a name="line8150">8150: </a><font color="#800000">/* structure of device registers for KL, DL, and DC</font>
+<a name="line8151">8151: </a><font color="#800000"> * interfaces-- more particularly, those for which the</font>
+<a name="line8152">8152: </a><font color="#800000"> * SSTART bit is off and can be treated by general routines</font>
+<a name="line8153">8153: </a><font color="#800000"> * (that is, not DH).</font>
+<a name="line8154">8154: </a><font color="#800000"> */</font>
+<a name="line8155">8155: </a><font color="#000000">struct</font> {
+<a name="line8156">8156: </a>        int ttrcsr;
+<a name="line8157">8157: </a>        int ttrbuf;
+<a name="line8158">8158: </a>        int tttcsr;
+<a name="line8159">8159: </a>        int tttbuf;
+<a name="line8160">8160: </a>};
+<a name="line8161">8161: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8162">8162: </a><font color="#800000">/* The routine implementing the gtty system call.</font>
+<a name="line8163">8163: </a><font color="#800000"> * Just call lower level routine and pass back values.</font>
+<a name="line8164">8164: </a><font color="#800000"> */</font>
+<a name="line8165">8165: </a><font color="#000000"><a name="tty"></a>gtty()</font>
+<a name="line8166">8166: </a>{
+<a name="line8167">8167: </a>        int v[3];
+<a name="line8168">8168: </a>        register *up, *vp;
+<a name="line8169">8169: </a>
+<a name="line8170">8170: </a>        vp = v;
+<a name="line8171">8171: </a>        sgtty(vp);
+<a name="line8172">8172: </a>        <font color="#000000">if</font> (u.u_error)
+<a name="line8173">8173: </a>                <font color="#000000">return</font>;
+<a name="line8174">8174: </a>        up = u.u_arg[0];
+<a name="line8175">8175: </a>        suword(up, *vp++);
+<a name="line8176">8176: </a>        suword(++up, *vp++);
+<a name="line8177">8177: </a>        suword(++up, *vp++);
+<a name="line8178">8178: </a>}
+<a name="line8179">8179: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8180">8180: </a><font color="#800000">/* The routine implementing the stty system call.</font>
+<a name="line8181">8181: </a><font color="#800000"> * Read in values and call lower level.</font>
+<a name="line8182">8182: </a><font color="#800000"> */</font>
+<a name="line8183">8183: </a><font color="#000000"><a name="tty"></a>stty()</font>
+<a name="line8184">8184: </a>{
+<a name="line8185">8185: </a>        register int *up;
+<a name="line8186">8186: </a>
+<a name="line8187">8187: </a>        up = u.u_arg[0];
+<a name="line8188">8188: </a>        u.u_arg[0] = fuword(up);
+<a name="line8189">8189: </a>        u.u_arg[1] = fuword(++up);
+<a name="line8190">8190: </a>        u.u_arg[2] = fuword(++up);
+<a name="line8191">8191: </a>        sgtty(0);
+<a name="line8192">8192: </a>}
+<a name="line8193">8193: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8194">8194: </a><font color="#800000">/* Stuff common to stty and gtty.</font>
+<a name="line8195">8195: </a><font color="#800000"> * Check legality and switch out to individual</font>
+<a name="line8196">8196: </a><font color="#800000"> * device routine.</font>
+<a name="line8197">8197: </a><font color="#800000"> * v  is 0 for stty; the parameters are taken from u.u_arg[].</font>
+<a name="line8198">8198: </a><font color="#800000"> * c  is non-zero for gtty and is the place in which the device</font>
+<a name="line8199">8199: </a><font color="#800000"> * routines place their information.</font>
+<a name="line8200">8200: </a><font color="#800000"> */</font>
+<a name="line8201">8201: </a><font color="#000000"><a name="gtty"></a>sgtty(v)</font>
+<a name="line8202">8202: </a>int *v;
+<a name="line8203">8203: </a>{
+<a name="line8204">8204: </a>        register <font color="#000000">struct file</font> *fp;
+<a name="line8205">8205: </a>        register <font color="#000000">struct inode</font> *ip;
+<a name="line8206">8206: </a>        <font color="#000000">if</font> ((fp = getf(u.u_ar0[R0])) == NULL)
+<a name="line8207">8207: </a>                <font color="#000000">return</font>;
+<a name="line8208">8208: </a>        ip = fp-&gt;f_inode;
+<a name="line8209">8209: </a>        <font color="#000000">if</font> ((ip-&gt;i_mode&amp;IFMT) != IFCHR) {
+<a name="line8210">8210: </a>                u.u_error = ENOTTY;
+<a name="line8211">8211: </a>                <font color="#000000">return</font>;
+<a name="line8212">8212: </a>        }
+<a name="line8213">8213: </a>        (*cdevsw[ip-&gt;i_addr[0].d_major].d_sgtty)(ip-&gt;i_addr[0], v);
+<a name="line8214">8214: </a>}
+<a name="line8215">8215: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8216">8216: </a><font color="#800000">/* Wait for output to drain, then flush input waiting. */</font>
+<a name="line8217">8217: </a><font color="#000000"><a name="flushtty"></a>wflushtty(atp)</font>
+<a name="line8218">8218: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8219">8219: </a>{
+<a name="line8220">8220: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8221">8221: </a>        tp = atp;
+<a name="line8222">8222: </a>        spl5();
+<a name="line8223">8223: </a>        <font color="#000000">while</font> (tp-&gt;t_outq.c_cc) {
+<a name="line8224">8224: </a>                tp-&gt;t_state =| ASLEEP;
+<a name="line8225">8225: </a>                sleep(&amp;tp-&gt;t_outq, TTOPRI);
+<a name="line8226">8226: </a>        }
+<a name="line8227">8227: </a>        flushtty(tp);
+<a name="line8228">8228: </a>        spl0();
+<a name="line8229">8229: </a>}
+<a name="line8230">8230: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8231">8231: </a><font color="#800000">/* Initialize clist by freeing all character blocks, then count</font>
+<a name="line8232">8232: </a><font color="#800000"> * number of character devices. (Once-only routine)</font>
+<a name="line8233">8233: </a><font color="#800000"> */</font>
+<a name="line8234">8234: </a><font color="#000000"><a name="init"></a>cinit()</font>
+<a name="line8235">8235: </a>{
+<a name="line8236">8236: </a>        register int ccp;
+<a name="line8237">8237: </a>        register <font color="#000000">struct cblock</font> *cp;
+<a name="line8238">8238: </a>        register <font color="#000000">struct cdevsw</font> *cdp;
+<a name="line8239">8239: </a>        ccp = cfree;
+<a name="line8240">8240: </a>        <font color="#000000">for</font> (cp=(ccp+07)&amp;~07; cp &lt;= &amp;cfree[NCLIST-1]; cp++) {
+<a name="line8241">8241: </a>                cp-&gt;c_next = cfreelist;
+<a name="line8242">8242: </a>                cfreelist = cp;
+<a name="line8243">8243: </a>        }
+<a name="line8244">8244: </a>        ccp = 0;
+<a name="line8245">8245: </a>        <font color="#000000">for</font>(cdp = cdevsw; cdp-&gt;d_open; cdp++)
+<a name="line8246">8246: </a>                ccp++;
+<a name="line8247">8247: </a>        nchrdev = ccp;
+<a name="line8248">8248: </a>}
+<a name="line8249">8249: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8250">8250: </a><font color="#800000">/* flush all TTY queues</font>
+<a name="line8251">8251: </a><font color="#800000"> */</font>
+<a name="line8252">8252: </a><font color="#000000"><a name="lushtty"></a>flushtty(atp)</font>
+<a name="line8253">8253: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8254">8254: </a>{
+<a name="line8255">8255: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8256">8256: </a>        register int sps;
+<a name="line8257">8257: </a>        tp = atp;
+<a name="line8258">8258: </a>        <font color="#000000">while</font> (getc(&amp;tp-&gt;t_canq) &gt;= 0);
+<a name="line8259">8259: </a>        <font color="#000000">while</font> (getc(&amp;tp-&gt;t_outq) &gt;= 0);
+<a name="line8260">8260: </a>        wakeup(&amp;tp-&gt;t_rawq);
+<a name="line8261">8261: </a>        wakeup(&amp;tp-&gt;t_outq);
+<a name="line8262">8262: </a>        sps = PS-&gt;integ;
+<a name="line8263">8263: </a>        spl5();
+<a name="line8264">8264: </a>        <font color="#000000">while</font> (getc(&amp;tp-&gt;t_rawq) &gt;= 0);
+<a name="line8265">8265: </a>        tp-&gt;t_delct = 0;
+<a name="line8266">8266: </a>        PS-&gt;integ = sps;
+<a name="line8267">8267: </a>}
+<a name="line8268">8268: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8269">8269: </a><font color="#800000">/* transfer raw input list to canonical list,</font>
+<a name="line8270">8270: </a><font color="#800000"> * doing erase-kill processing and handling escapes.</font>
+<a name="line8271">8271: </a><font color="#800000"> * It waits until a full line has been typed in cooked mode,</font>
+<a name="line8272">8272: </a><font color="#800000"> * or until any character has been typed in raw mode.</font>
+<a name="line8273">8273: </a><font color="#800000"> */</font>
+<a name="line8274">8274: </a><font color="#000000"><a name="anon"></a>canon(atp)</font>
+<a name="line8275">8275: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8276">8276: </a>{
+<a name="line8277">8277: </a>        register char *bp;
+<a name="line8278">8278: </a>        char *bp1;
+<a name="line8279">8279: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8280">8280: </a>        register int c;
+<a name="line8281">8281: </a>
+<a name="line8282">8282: </a>        tp = atp;
+<a name="line8283">8283: </a>        spl5();
+<a name="line8284">8284: </a>        <font color="#000000">while</font> (tp-&gt;t_delct==0) {
+<a name="line8285">8285: </a>                <font color="#000000">if</font> ((tp-&gt;t_state&amp;CARR_ON)==0)
+<a name="line8286">8286: </a>                        <font color="#000000">return</font>(0);
+<a name="line8287">8287: </a>                sleep(&amp;tp-&gt;t_rawq, TTIPRI);
+<a name="line8288">8288: </a>        }
+<a name="line8289">8289: </a>        spl0();
+<a name="line8290">8290: </a><font color="#000000">loop:</font>
+<a name="line8291">8291: </a>        bp = &amp;canonb[2];
+<a name="line8292">8292: </a>        <font color="#000000">while</font> ((c=getc(&amp;tp-&gt;t_rawq)) &gt;= 0) {
+<a name="line8293">8293: </a>                <font color="#000000">if</font> (c==0377) {
+<a name="line8294">8294: </a>                        tp-&gt;t_delct--;
+<a name="line8295">8295: </a>                        <font color="#000000">break</font>;
+<a name="line8296">8296: </a>                }
+<a name="line8297">8297: </a>                <font color="#000000">if</font> ((tp-&gt;t_flags&amp;RAW)==0) {
+<a name="line8298">8298: </a>                        <font color="#000000">if</font> (bp[-1]!='\\') {
+<a name="line8299">8299: </a>                                <font color="#000000">if</font> (c==tp-&gt;t_erase) {
+<a name="line8300">8300: </a>                                        <font color="#000000">if</font> (bp &gt; &amp;canonb[2])
+<a name="line8301">8301: </a>                                                bp--;
+<a name="line8302">8302: </a>                                        <font color="#000000">continue</font>;
+<a name="line8303">8303: </a>                                }
+<a name="line8304">8304: </a>                                <font color="#000000">if</font> (c==tp-&gt;t_kill)
+<a name="line8305">8305: </a>                                        <font color="#000000">goto</font> loop;
+<a name="line8306">8306: </a>                                <font color="#000000">if</font> (c==CEOT)
+<a name="line8307">8307: </a>                                        <font color="#000000">continue</font>;
+<a name="line8308">8308: </a>                        } <font color="#000000">else</font>
+<a name="line8309">8309: </a>                        <font color="#000000">if</font> (maptab[c] &amp;&amp; (maptab[c]==c || (tp-&gt;t_flags&amp;LCASE))) {
+<a name="line8310">8310: </a>                                <font color="#000000">if</font> (bp[-2] != '\\')
+<a name="line8311">8311: </a>                                        c = maptab[c];
+<a name="line8312">8312: </a>                                bp--;
+<a name="line8313">8313: </a>                        }
+<a name="line8314">8314: </a>                }
+<a name="line8315">8315: </a>                *bp++ = c;
+<a name="line8316">8316: </a>                <font color="#000000">if</font> (bp&gt;=canonb+CANBSIZ)
+<a name="line8317">8317: </a>                        <font color="#000000">break</font>;
+<a name="line8318">8318: </a>        }
+<a name="line8319">8319: </a>        bp1 = bp;
+<a name="line8320">8320: </a>        bp = &amp;canonb[2];
+<a name="line8321">8321: </a>        c = &amp;tp-&gt;t_canq;
+<a name="line8322">8322: </a>        <font color="#000000">while</font> (bp&lt;bp1)
+<a name="line8323">8323: </a>                putc(*bp++, c);
+<a name="line8324">8324: </a>        <font color="#000000">return</font>(1);
+<a name="line8325">8325: </a>}
+<a name="line8326">8326: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8327">8327: </a><font color="#800000">/* Place a character on raw TTY input queue, putting in delimiters</font>
+<a name="line8328">8328: </a><font color="#800000"> * and waking up top half as needed.</font>
+<a name="line8329">8329: </a><font color="#800000"> * Also echo if required.</font>
+<a name="line8330">8330: </a><font color="#800000"> * The arguments are the character and the appropriate</font>
+<a name="line8331">8331: </a><font color="#800000"> * tty structure.</font>
+<a name="line8332">8332: </a><font color="#800000"> */</font>
+<a name="line8333">8333: </a><font color="#000000"><a name="tyinput"></a>ttyinput(ac, atp)</font>
+<a name="line8334">8334: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8335">8335: </a>{
+<a name="line8336">8336: </a>        register int t_flags, c;
+<a name="line8337">8337: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8338">8338: </a>
+<a name="line8339">8339: </a>        tp = atp;
+<a name="line8340">8340: </a>        c = ac;
+<a name="line8341">8341: </a>        t_flags = tp-&gt;t_flags;
+<a name="line8342">8342: </a>        <font color="#000000">if</font> ((c =&amp; 0177) == '\r' &amp;&amp; t_flags&amp;CRMOD)
+<a name="line8343">8343: </a>                c = '\n';
+<a name="line8344">8344: </a>        <font color="#000000">if</font> ((t_flags&amp;RAW)==0 &amp;&amp; (c==CQUIT || c==CINTR)) {
+<a name="line8345">8345: </a>                signal(tp, c==CINTR? SIGINT:SIGQIT);
+<a name="line8346">8346: </a>                flushtty(tp);
+<a name="line8347">8347: </a>                <font color="#000000">return</font>;
+<a name="line8348">8348: </a>        }
+<a name="line8349">8349: </a>        <font color="#000000">if</font> (tp-&gt;t_rawq.c_cc&gt;=TTYHOG) {
+<a name="line8350">8350: </a>                flushtty(tp);
+<a name="line8351">8351: </a>                <font color="#000000">return</font>;
+<a name="line8352">8352: </a>        }
+<a name="line8353">8353: </a>        <font color="#000000">if</font> (t_flags&amp;LCASE &amp;&amp; c&gt;='A' &amp;&amp; c&lt;='Z')
+<a name="line8354">8354: </a>                c =+ 'a'-'A';
+<a name="line8355">8355: </a>        putc(c, &amp;tp-&gt;t_rawq);
+<a name="line8356">8356: </a>        <font color="#000000">if</font> (t_flags&amp;RAW || c=='\n' || c==004) {
+<a name="line8357">8357: </a>                wakeup(&amp;tp-&gt;t_rawq);
+<a name="line8358">8358: </a>                <font color="#000000">if</font> (putc(0377, &amp;tp-&gt;t_rawq)==0)
+<a name="line8359">8359: </a>                        tp-&gt;t_delct++;
+<a name="line8360">8360: </a>        }
+<a name="line8361">8361: </a>        <font color="#000000">if</font> (t_flags&amp;ECHO) {
+<a name="line8362">8362: </a>                ttyoutput(c, tp);
+<a name="line8363">8363: </a>                ttstart(tp);
+<a name="line8364">8364: </a>        }
+<a name="line8365">8365: </a>}
+<a name="line8366">8366: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8367">8367: </a><font color="#800000">/* put character on TTY output queue, adding delays,</font>
+<a name="line8368">8368: </a><font color="#800000"> * expanding tabs, and handling the CR/NL bit.</font>
+<a name="line8369">8369: </a><font color="#800000"> * It is called both from the top half for output, and from</font>
+<a name="line8370">8370: </a><font color="#800000"> * interrupt level for echoing.</font>
+<a name="line8371">8371: </a><font color="#800000"> * The arguments are the character and the tty structure.</font>
+<a name="line8372">8372: </a><font color="#800000"> */</font>
+<a name="line8373">8373: </a><font color="#000000"><a name="tyoutput"></a>ttyoutput(ac, tp)</font>
+<a name="line8374">8374: </a><font color="#000000"><a name="tty"></a>struct tty </font>*tp;
+<a name="line8375">8375: </a>{
+<a name="line8376">8376: </a>        register int c;
+<a name="line8377">8377: </a>        register <font color="#000000">struct tty</font> *rtp;
+<a name="line8378">8378: </a>        register char *colp;
+<a name="line8379">8379: </a>        int ctype;
+<a name="line8380">8380: </a>
+<a name="line8381">8381: </a>        rtp = tp;
+<a name="line8382">8382: </a>        c = ac&amp;0177;
+<a name="line8383">8383: </a>        <font color="#800000">/* Ignore EOT in normal mode to avoid hanging up</font>
+<a name="line8384">8384: </a><font color="#800000">         * certain terminals.</font>
+<a name="line8385">8385: </a><font color="#800000">         */</font>
+<a name="line8386">8386: </a>        <font color="#000000">if</font> (c==004 &amp;&amp; (rtp-&gt;t_flags&amp;RAW)==0)
+<a name="line8387">8387: </a>                <font color="#000000">return</font>;
+<a name="line8388">8388: </a>        <font color="#800000">/* Turn tabs to spaces as required</font>
+<a name="line8389">8389: </a><font color="#800000">         */</font>
+<a name="line8390">8390: </a>        <font color="#000000">if</font> (c=='\t' &amp;&amp; rtp-&gt;t_flags&amp;XTABS) {
+<a name="line8391">8391: </a>                <font color="#000000">do</font>
+<a name="line8392">8392: </a>                        ttyoutput(' ', rtp);
+<a name="line8393">8393: </a>                <font color="#000000">while</font> (rtp-&gt;t_col&amp;07);
+<a name="line8394">8394: </a>                <font color="#000000">return</font>;
+<a name="line8395">8395: </a>        }
+<a name="line8396">8396: </a>        <font color="#800000">/* for upper-case-only terminals,</font>
+<a name="line8397">8397: </a><font color="#800000">         * generate escapes.</font>
+<a name="line8398">8398: </a><font color="#800000">         */</font>
+<a name="line8399">8399: </a>        <font color="#000000">if</font> (rtp-&gt;t_flags&amp;LCASE) {
+<a name="line8400">8400: </a>                colp = <font color="#000000">"({)}!|^~'`"</font>;
+<a name="line8401">8401: </a>                <font color="#000000">while</font>(*colp++)
+<a name="line8402">8402: </a>                        <font color="#000000">if</font>(c == *colp++) {
+<a name="line8403">8403: </a>                                ttyoutput('\\', rtp);
+<a name="line8404">8404: </a>                                c = colp[-2];
+<a name="line8405">8405: </a>                                <font color="#000000">break</font>;
+<a name="line8406">8406: </a>                        }
+<a name="line8407">8407: </a>                <font color="#000000">if</font> ('a'&lt;=c &amp;&amp; c&lt;='z')
+<a name="line8408">8408: </a>                        c =+ 'A' - 'a';
+<a name="line8409">8409: </a>        }
+<a name="line8410">8410: </a>        <font color="#800000">/* turn &lt;nl&gt; to &lt;cr&gt;&lt;lf&gt; if desired.</font>
+<a name="line8411">8411: </a><font color="#800000">         */</font>
+<a name="line8412">8412: </a>        <font color="#000000">if</font> (c=='\n' &amp;&amp; rtp-&gt;t_flags&amp;CRMOD)
+<a name="line8413">8413: </a>                ttyoutput('\r', rtp);
+<a name="line8414">8414: </a>        <font color="#000000">if</font> (putc(c, &amp;rtp-&gt;t_outq))
+<a name="line8415">8415: </a>                <font color="#000000">return</font>;
+<a name="line8416">8416: </a>        <font color="#800000">/* Calculate delays.</font>
+<a name="line8417">8417: </a><font color="#800000">         * The numbers here represent clock ticks</font>
+<a name="line8418">8418: </a><font color="#800000">         * and are not necessarily optimal for all terminals.</font>
+<a name="line8419">8419: </a><font color="#800000">         * The delays are indicated by characters above 0200,</font>
+<a name="line8420">8420: </a><font color="#800000">         * thus (unfortunately) restricting the transmission</font>
+<a name="line8421">8421: </a><font color="#800000">         * path to 7 bits.</font>
+<a name="line8422">8422: </a><font color="#800000">         */</font>
+<a name="line8423">8423: </a>        colp = &amp;rtp-&gt;t_col;
+<a name="line8424">8424: </a>        ctype = partab[c];
+<a name="line8425">8425: </a>        c = 0;
+<a name="line8426">8426: </a>        <font color="#000000">switch</font> (ctype&amp;077) {
+<a name="line8427">8427: </a>        <font color="#800000">/* ordinary */</font>
+<a name="line8428">8428: </a>        <font color="#000000">case</font> 0:
+<a name="line8429">8429: </a>                (*colp)++;
+<a name="line8430">8430: </a>        <font color="#800000">/* non-printing */</font>
+<a name="line8431">8431: </a>        <font color="#000000">case</font> 1:
+<a name="line8432">8432: </a>                <font color="#000000">break</font>;
+<a name="line8433">8433: </a>        <font color="#800000">/* backspace */</font>
+<a name="line8434">8434: </a>        <font color="#000000">case</font> 2:
+<a name="line8435">8435: </a>                <font color="#000000">if</font> (*colp)
+<a name="line8436">8436: </a>                        (*colp)--;
+<a name="line8437">8437: </a>                <font color="#000000">break</font>;
+<a name="line8438">8438: </a>        <font color="#800000">/* newline */</font>
+<a name="line8439">8439: </a>        <font color="#000000">case</font> 3:
+<a name="line8440">8440: </a>                ctype = (rtp-&gt;t_flags &gt;&gt; 8) &amp; 03;
+<a name="line8441">8441: </a>                <font color="#000000">if</font>(ctype == 1) { <font color="#800000">/* tty 37 */</font>
+<a name="line8442">8442: </a>                        <font color="#000000">if</font> (*colp)
+<a name="line8443">8443: </a>                                c = max((*colp&gt;&gt;4) + 3, 6);
+<a name="line8444">8444: </a>                } <font color="#000000">else</font>
+<a name="line8445">8445: </a>                <font color="#000000">if</font>(ctype == 2) { <font color="#800000">/* vt05 */</font>
+<a name="line8446">8446: </a>                        c = 6;
+<a name="line8447">8447: </a>                }
+<a name="line8448">8448: </a>                *colp = 0;
+<a name="line8449">8449: </a>                <font color="#000000">break</font>;
+<a name="line8450">8450: </a>        <font color="#800000">/* tab */</font>
+<a name="line8451">8451: </a>        <font color="#000000">case</font> 4:
+<a name="line8452">8452: </a>                ctype = (rtp-&gt;t_flags &gt;&gt; 10) &amp; 03;
+<a name="line8453">8453: </a>                <font color="#000000">if</font>(ctype == 1) { <font color="#800000">/* tty 37 */</font>
+<a name="line8454">8454: </a>                        c = 1 - (*colp | ~07);
+<a name="line8455">8455: </a>                        <font color="#000000">if</font>(c &lt; 5)
+<a name="line8456">8456: </a>                                c = 0;
+<a name="line8457">8457: </a>                }
+<a name="line8458">8458: </a>                *colp =| 07;
+<a name="line8459">8459: </a>                (*colp)++;
+<a name="line8460">8460: </a>                <font color="#000000">break</font>;
+<a name="line8461">8461: </a>        <font color="#800000">/* vertical motion */</font>
+<a name="line8462">8462: </a>        <font color="#000000">case</font> 5:
+<a name="line8463">8463: </a>                <font color="#000000">if</font>(rtp-&gt;t_flags &amp; VTDELAY) <font color="#800000">/* tty 37 */</font>
+<a name="line8464">8464: </a>                        c = 0177;
+<a name="line8465">8465: </a>                <font color="#000000">break</font>;
+<a name="line8466">8466: </a>        <font color="#800000">/* carriage return */</font>
+<a name="line8467">8467: </a>        <font color="#000000">case</font> 6:
+<a name="line8468">8468: </a>                ctype = (rtp-&gt;t_flags &gt;&gt; 12) &amp; 03;
+<a name="line8469">8469: </a>                <font color="#000000">if</font>(ctype == 1) { <font color="#800000">/* tn 300 */</font>
+<a name="line8470">8470: </a>                        c = 5;
+<a name="line8471">8471: </a>                } <font color="#000000">else</font>
+<a name="line8472">8472: </a>                <font color="#000000">if</font>(ctype == 2) { <font color="#800000">/* ti 700 */</font>
+<a name="line8473">8473: </a>                        c = 10;
+<a name="line8474">8474: </a>                }
+<a name="line8475">8475: </a>                *colp = 0;
+<a name="line8476">8476: </a>        }
+<a name="line8477">8477: </a>        <font color="#000000">if</font>(c)
+<a name="line8478">8478: </a>                putc(c|0200, &amp;rtp-&gt;t_outq);
+<a name="line8479">8479: </a>}
+<a name="line8480">8480: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8481">8481: </a><font color="#800000">/* Restart typewriter output following a delay</font>
+<a name="line8482">8482: </a><font color="#800000"> * timeout.</font>
+<a name="line8483">8483: </a><font color="#800000"> * The name of the routine is passed to the timeout</font>
+<a name="line8484">8484: </a><font color="#800000"> * subroutine and it is called during a clock interrupt.</font>
+<a name="line8485">8485: </a><font color="#800000"> */</font>
+<a name="line8486">8486: </a><font color="#000000"><a name="trstrt"></a>ttrstrt(atp)</font>
+<a name="line8487">8487: </a>{
+<a name="line8488">8488: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8489">8489: </a>
+<a name="line8490">8490: </a>        tp = atp;
+<a name="line8491">8491: </a>        tp-&gt;t_state =&amp; ~TIMEOUT;
+<a name="line8492">8492: </a>        ttstart(tp);
+<a name="line8493">8493: </a>}
+<a name="line8494">8494: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8495">8495: </a><font color="#800000">/*</font>
+<a name="line8496">8496: </a><font color="#800000"> * Start output on the typewriter. It is used from the top half</font>
+<a name="line8497">8497: </a><font color="#800000"> * after some characters have been put on the output queue,</font>
+<a name="line8498">8498: </a><font color="#800000"> * from the interrupt routine to transmit the next</font>
+<a name="line8499">8499: </a><font color="#800000"> * character, and after a timeout has finished.</font>
+<a name="line8500">8500: </a><font color="#800000"> * If the SSTART bit is off for the tty the work is done here,</font>
+<a name="line8501">8501: </a><font color="#800000"> * using the protocol of the single-line interfaces (KL, DL, DC);</font>
+<a name="line8502">8502: </a><font color="#800000"> * otherwise the address word of the tty structure is</font>
+<a name="line8503">8503: </a><font color="#800000"> * taken to be the name of the device-dependent startup routine.</font>
+<a name="line8504">8504: </a><font color="#800000"> */</font>
+<a name="line8505">8505: </a><font color="#000000"><a name="tstart"></a>ttstart(atp)</font>
+<a name="line8506">8506: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8507">8507: </a>{
+<a name="line8508">8508: </a>        register int *addr, c;
+<a name="line8509">8509: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8510">8510: </a>        <font color="#000000">struct</font> { int (*func)(); };
+<a name="line8511">8511: </a>
+<a name="line8512">8512: </a>        tp = atp;
+<a name="line8513">8513: </a>        addr = tp-&gt;t_addr;
+<a name="line8514">8514: </a>        <font color="#000000">if</font> (tp-&gt;t_state&amp;SSTART) {
+<a name="line8515">8515: </a>                (*addr.func)(tp);
+<a name="line8516">8516: </a>                <font color="#000000">return</font>;
+<a name="line8517">8517: </a>        }
+<a name="line8518">8518: </a>        <font color="#000000">if</font> ((addr-&gt;tttcsr&amp;DONE)==0 || tp-&gt;t_state&amp;TIMEOUT)
+<a name="line8519">8519: </a>                <font color="#000000">return</font>;
+<a name="line8520">8520: </a>        <font color="#000000">if</font> ((c=getc(&amp;tp-&gt;t_outq)) &gt;= 0) {
+<a name="line8521">8521: </a>                <font color="#000000">if</font> (c&lt;=0177)
+<a name="line8522">8522: </a>                        addr-&gt;tttbuf = c | (partab[c]&amp;0200);
+<a name="line8523">8523: </a>                <font color="#000000">else</font> {
+<a name="line8524">8524: </a>                        timeout(ttrstrt, tp, c&amp;0177);
+<a name="line8525">8525: </a>                        tp-&gt;t_state =| TIMEOUT;
+<a name="line8526">8526: </a>                }
+<a name="line8527">8527: </a>        }
+<a name="line8528">8528: </a>}
+<a name="line8529">8529: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8530">8530: </a><font color="#800000">/* Called from device's read routine after it has</font>
+<a name="line8531">8531: </a><font color="#800000"> * calculated the tty-structure given as argument.</font>
+<a name="line8532">8532: </a><font color="#800000"> * The pc is backed up for the duration of this call.</font>
+<a name="line8533">8533: </a><font color="#800000"> * In case of a caught interrupt, an RTI will re-execute.</font>
+<a name="line8534">8534: </a><font color="#800000"> */</font>
+<a name="line8535">8535: </a><font color="#000000"><a name="tread"></a>ttread(atp)</font>
+<a name="line8536">8536: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8537">8537: </a>{
+<a name="line8538">8538: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8539">8539: </a>
+<a name="line8540">8540: </a>        tp = atp;
+<a name="line8541">8541: </a>        <font color="#000000">if</font> ((tp-&gt;t_state&amp;CARR_ON)==0)
+<a name="line8542">8542: </a>                <font color="#000000">return</font>;
+<a name="line8543">8543: </a>        <font color="#000000">if</font> (tp-&gt;t_canq.c_cc || canon(tp))
+<a name="line8544">8544: </a>                <font color="#000000">while</font> (tp-&gt;t_canq.c_cc &amp;&amp; passc(getc(&amp;tp-&gt;t_canq))&gt;=0);
+<a name="line8545">8545: </a>}
+<a name="line8546">8546: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8547">8547: </a><font color="#800000">/* Called from the device's write routine after it has</font>
+<a name="line8548">8548: </a><font color="#800000"> * calculated the tty-structure given as argument.</font>
+<a name="line8549">8549: </a><font color="#800000"> */</font>
+<a name="line8550">8550: </a><font color="#000000"><a name="twrite"></a>ttwrite(atp)</font>
+<a name="line8551">8551: </a><font color="#000000"><a name="tty"></a>struct tty </font>*atp;
+<a name="line8552">8552: </a>{
+<a name="line8553">8553: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8554">8554: </a>        register int c;
+<a name="line8555">8555: </a>        tp = atp;
+<a name="line8556">8556: </a>        <font color="#000000">if</font> ((tp-&gt;t_state&amp;CARR_ON)==0)
+<a name="line8557">8557: </a>                <font color="#000000">return</font>;
+<a name="line8558">8558: </a>        <font color="#000000">while</font> ((c=cpass())&gt;=0) {
+<a name="line8559">8559: </a>                spl5();
+<a name="line8560">8560: </a>                <font color="#000000">while</font> (tp-&gt;t_outq.c_cc &gt; TTHIWAT) {
+<a name="line8561">8561: </a>                        ttstart(tp);
+<a name="line8562">8562: </a>                        tp-&gt;t_state =| ASLEEP;
+<a name="line8563">8563: </a>                        sleep(&amp;tp-&gt;t_outq, TTOPRI);
+<a name="line8564">8564: </a>                }
+<a name="line8565">8565: </a>                spl0();
+<a name="line8566">8566: </a>                ttyoutput(c, tp);
+<a name="line8567">8567: </a>        }
+<a name="line8568">8568: </a>        ttstart(tp);
+<a name="line8569">8569: </a>}
+<a name="line8570">8570: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8571">8571: </a><font color="#800000">/* Common code for gtty and stty functions on typewriters.</font>
+<a name="line8572">8572: </a><font color="#800000"> * If v is non-zero then gtty is being done and information is</font>
+<a name="line8573">8573: </a><font color="#800000"> * passed back therein;</font>
+<a name="line8574">8574: </a><font color="#800000"> * if it is zero stty is being done and the input information is in the</font>
+<a name="line8575">8575: </a><font color="#800000"> * u_arg array.</font>
+<a name="line8576">8576: </a><font color="#800000"> */</font>
+<a name="line8577">8577: </a><font color="#000000"><a name="tystty"></a>ttystty(atp, av)</font>
+<a name="line8578">8578: </a>int *atp, *av;
+<a name="line8579">8579: </a>{
+<a name="line8580">8580: </a>        register  *tp, *v;
+<a name="line8581">8581: </a>        tp = atp;
+<a name="line8582">8582: </a>        <font color="#000000">if</font>(v = av) {
+<a name="line8583">8583: </a>                *v++ = tp-&gt;t_speeds;
+<a name="line8584">8584: </a>                v-&gt;lobyte = tp-&gt;t_erase;
+<a name="line8585">8585: </a>                v-&gt;hibyte = tp-&gt;t_kill;
+<a name="line8586">8586: </a>                v[1] = tp-&gt;t_flags;
+<a name="line8587">8587: </a>                <font color="#000000">return</font>(1);
+<a name="line8588">8588: </a>        }
+<a name="line8589">8589: </a>        wflushtty(tp);
+<a name="line8590">8590: </a>        v = u.u_arg;
+<a name="line8591">8591: </a>        tp-&gt;t_speeds = *v++;
+<a name="line8592">8592: </a>        tp-&gt;t_erase = v-&gt;lobyte;
+<a name="line8593">8593: </a>        tp-&gt;t_kill = v-&gt;hibyte;
+<a name="line8594">8594: </a>        tp-&gt;t_flags = v[1];
+<a name="line8595">8595: </a>        <font color="#000000">return</font>(0);
+<a name="line8596">8596: </a>}
+<a name="line8597">8597: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

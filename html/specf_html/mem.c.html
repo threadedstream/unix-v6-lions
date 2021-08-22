@@ -1,0 +1,87 @@
+
+<html>
+<head>
+<title>mem.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line9000">9000: </a><font color="#000000">#</font>
+<a name="line9001">9001: </a><font color="#800000">/*</font>
+<a name="line9002">9002: </a><font color="#800000"> */</font>
+<a name="line9003">9003: </a>
+<a name="line9004">9004: </a><font color="#800000">/*</font>
+<a name="line9005">9005: </a><font color="#800000"> *      Memory special file</font>
+<a name="line9006">9006: </a><font color="#800000"> *      minor device 0 is physical memory</font>
+<a name="line9007">9007: </a><font color="#800000"> *      minor device 1 is kernel memory</font>
+<a name="line9008">9008: </a><font color="#800000"> *      minor device 2 is EOF/RATHOLE</font>
+<a name="line9009">9009: </a><font color="#800000"> */</font>
+<a name="line9010">9010: </a>
+<a name="line9011">9011: </a><font color="#000000">#include "../param.h"</font>
+<a name="line9012">9012: </a><font color="#000000">#include "../user.h"</font>
+<a name="line9013">9013: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line9014">9014: </a><font color="#000000">#include "../seg.h"</font>
+<a name="line9015">9015: </a>
+<a name="line9016">9016: </a><font color="#000000"><a name="mread"></a>mmread(dev)</font>
+<a name="line9017">9017: </a>{
+<a name="line9018">9018: </a>        register c, bn, on;
+<a name="line9019">9019: </a>        int a, d;
+<a name="line9020">9020: </a>
+<a name="line9021">9021: </a>        <font color="#000000">if</font>(dev.d_minor == 2)
+<a name="line9022">9022: </a>                <font color="#000000">return</font>;
+<a name="line9023">9023: </a>        <font color="#000000">do</font> {
+<a name="line9024">9024: </a>                bn = lshift(u.u_offset, -6);
+<a name="line9025">9025: </a>                on = u.u_offset[1] &amp; 077;
+<a name="line9026">9026: </a>                a = UISA-&gt;r[0];
+<a name="line9027">9027: </a>                d = UISD-&gt;r[0];
+<a name="line9028">9028: </a>                spl7();
+<a name="line9029">9029: </a>                UISA-&gt;r[0] = bn;
+<a name="line9030">9030: </a>                UISD-&gt;r[0] = 077406;
+<a name="line9031">9031: </a>                <font color="#000000">if</font>(dev.d_minor == 1)
+<a name="line9032">9032: </a>                        UISA-&gt;r[0] = (ka6-6)-&gt;r[(bn&gt;&gt;7)&amp;07] + (bn &amp; 0177);
+<a name="line9033">9033: </a>
+<a name="line9034">9034: </a>                c = fuibyte(on);
+<a name="line9035">9035: </a>                UISA-&gt;r[0] = a;
+<a name="line9036">9036: </a>                UISD-&gt;r[0] = d;
+<a name="line9037">9037: </a>                spl0();
+<a name="line9038">9038: </a>        } <font color="#000000">while</font>(u.u_error==0 &amp;&amp; passc(c)&gt;=0);
+<a name="line9039">9039: </a>}
+<a name="line9040">9040: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line9041">9041: </a>
+<a name="line9042">9042: </a><font color="#000000"><a name="mwrite"></a>mmwrite(dev)</font>
+<a name="line9043">9043: </a>{
+<a name="line9044">9044: </a>        register c, bn, on;
+<a name="line9045">9045: </a>        int a, d;
+<a name="line9046">9046: </a>
+<a name="line9047">9047: </a>        <font color="#000000">if</font>(dev.d_minor == 2) {
+<a name="line9048">9048: </a>                c = u.u_count;
+<a name="line9049">9049: </a>                u.u_count = 0;
+<a name="line9050">9050: </a>                u.u_base =+ c;
+<a name="line9051">9051: </a>                dpadd(u.u_offset, c);
+<a name="line9052">9052: </a>                <font color="#000000">return</font>;
+<a name="line9053">9053: </a>        }
+<a name="line9054">9054: </a>        <font color="#000000">for</font>(;;) {
+<a name="line9055">9055: </a>                bn = lshift(u.u_offset, -6);
+<a name="line9056">9056: </a>                on = u.u_offset[1] &amp; 077;
+<a name="line9057">9057: </a>                <font color="#000000">if</font> ((c=cpass())&lt;0 || u.u_error!=0)
+<a name="line9058">9058: </a>                        <font color="#000000">break</font>;
+<a name="line9059">9059: </a>                a = UISA-&gt;r[0];
+<a name="line9060">9060: </a>                d = UISD-&gt;r[0];
+<a name="line9061">9061: </a>                spl7();
+<a name="line9062">9062: </a>                UISA-&gt;r[0] = bn;
+<a name="line9063">9063: </a>                UISD-&gt;r[0] = 077406;
+<a name="line9064">9064: </a>                <font color="#000000">if</font>(dev.d_minor == 1)
+<a name="line9065">9065: </a>                        UISA-&gt;r[0] = (ka6-6)-&gt;r[(bn&gt;&gt;7)&amp;07] + (bn &amp; 0177);
+<a name="line9066">9066: </a>
+<a name="line9067">9067: </a>                suibyte(on, c);
+<a name="line9068">9068: </a>                UISA-&gt;r[0] = a;
+<a name="line9069">9069: </a>                UISD-&gt;r[0] = d;
+<a name="line9070">9070: </a>                spl0();
+<a name="line9071">9071: </a>        }
+<a name="line9072">9072: </a>}
+<a name="line9073">9073: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

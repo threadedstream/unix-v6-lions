@@ -1,0 +1,152 @@
+
+<html>
+<head>
+<title>rk.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5350">5350: </a><font color="#000000">#</font>
+<a name="line5351">5351: </a><font color="#800000">/*</font>
+<a name="line5352">5352: </a><font color="#800000"> */</font>
+<a name="line5353">5353: </a>
+<a name="line5354">5354: </a><font color="#800000">/*</font>
+<a name="line5355">5355: </a><font color="#800000"> * RK disk driver</font>
+<a name="line5356">5356: </a><font color="#800000"> */</font>
+<a name="line5357">5357: </a>
+<a name="line5358">5358: </a><font color="#000000">#include "../param.h"</font>
+<a name="line5359">5359: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line5360">5360: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line5361">5361: </a><font color="#000000">#include "../user.h"</font>
+<a name="line5362">5362: </a>
+<a name="line5363">5363: </a><font color="#000000">#define RKADDR  0177400</font>
+<a name="line5364">5364: </a><font color="#000000">#define NRK     4</font>
+<a name="line5365">5365: </a><font color="#000000">#define NRKBLK  4872</font>
+<a name="line5366">5366: </a>
+<a name="line5367">5367: </a><font color="#000000">#define RESET   0</font>
+<a name="line5368">5368: </a><font color="#000000">#define GO      01</font>
+<a name="line5369">5369: </a><font color="#000000">#define DRESET  014</font>
+<a name="line5370">5370: </a><font color="#000000">#define IENABLE 0100</font>
+<a name="line5371">5371: </a><font color="#000000">#define DRY     0200</font>
+<a name="line5372">5372: </a><font color="#000000">#define ARDY    0100</font>
+<a name="line5373">5373: </a><font color="#000000">#define WLO     020000</font>
+<a name="line5374">5374: </a><font color="#000000">#define CTLRDY  0200</font>
+<a name="line5375">5375: </a>
+<a name="line5376">5376: </a><font color="#000000">struct</font> {
+<a name="line5377">5377: </a>        int rkds;
+<a name="line5378">5378: </a>        int rker;
+<a name="line5379">5379: </a>        int rkcs;
+<a name="line5380">5380: </a>        int rkwc;
+<a name="line5381">5381: </a>        int rkba;
+<a name="line5382">5382: </a>        int rkda;
+<a name="line5383">5383: </a>};
+<a name="line5384">5384: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5385">5385: </a>
+<a name="line5386">5386: </a><font color="#000000">struct</font>  devtab  rktab;
+<a name="line5387">5387: </a><font color="#000000">struct</font>  buf     rrkbuf;
+<a name="line5388">5388: </a>
+<a name="line5389">5389: </a><font color="#000000"><a name="kstrategy"></a>rkstrategy(abp)</font>
+<a name="line5390">5390: </a><font color="#000000"><a name="buf"></a>struct buf </font>*abp;
+<a name="line5391">5391: </a>{
+<a name="line5392">5392: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5393">5393: </a>        register *qc, *ql;
+<a name="line5394">5394: </a>        int d;
+<a name="line5395">5395: </a>
+<a name="line5396">5396: </a>        bp = abp;
+<a name="line5397">5397: </a>        <font color="#000000">if</font>(bp-&gt;b_flags&amp;B_PHYS)
+<a name="line5398">5398: </a>                mapalloc(bp);
+<a name="line5399">5399: </a>        d = bp-&gt;b_dev.d_minor-7;
+<a name="line5400">5400: </a>        <font color="#000000">if</font>(d &lt;= 0)
+<a name="line5401">5401: </a>                d = 1;
+<a name="line5402">5402: </a>        <font color="#000000">if</font> (bp-&gt;b_blkno &gt;= NRKBLK*d) {
+<a name="line5403">5403: </a>                bp-&gt;b_flags =| B_ERROR;
+<a name="line5404">5404: </a>                iodone(bp);
+<a name="line5405">5405: </a>                <font color="#000000">return</font>;
+<a name="line5406">5406: </a>        }
+<a name="line5407">5407: </a>        bp-&gt;av_forw = 0;
+<a name="line5408">5408: </a>        spl5();
+<a name="line5409">5409: </a>        <font color="#000000">if</font> (rktab.d_actf==0)
+<a name="line5410">5410: </a>                rktab.d_actf = bp;
+<a name="line5411">5411: </a>        <font color="#000000">else</font>
+<a name="line5412">5412: </a>                rktab.d_actl-&gt;av_forw = bp;
+<a name="line5413">5413: </a>        rktab.d_actl = bp;
+<a name="line5414">5414: </a>        <font color="#000000">if</font> (rktab.d_active==0)
+<a name="line5415">5415: </a>                rkstart();
+<a name="line5416">5416: </a>        spl0();
+<a name="line5417">5417: </a>}
+<a name="line5418">5418: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5419">5419: </a>
+<a name="line5420">5420: </a><font color="#000000"><a name="kaddr"></a>rkaddr(bp)</font>
+<a name="line5421">5421: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5422">5422: </a>{
+<a name="line5423">5423: </a>        register <font color="#000000">struct buf</font> *p;
+<a name="line5424">5424: </a>        register int b;
+<a name="line5425">5425: </a>        int d, m;
+<a name="line5426">5426: </a>
+<a name="line5427">5427: </a>        p = bp;
+<a name="line5428">5428: </a>        b = p-&gt;b_blkno;
+<a name="line5429">5429: </a>        m = p-&gt;b_dev.d_minor - 7;
+<a name="line5430">5430: </a>        <font color="#000000">if</font>(m &lt;= 0)
+<a name="line5431">5431: </a>                d = p-&gt;b_dev.d_minor;
+<a name="line5432">5432: </a>        <font color="#000000">else</font> {
+<a name="line5433">5433: </a>                d = lrem(b, m);
+<a name="line5434">5434: </a>                b = ldiv(b, m);
+<a name="line5435">5435: </a>        }
+<a name="line5436">5436: </a>        <font color="#000000">return</font>(d&lt;&lt;13 | (b/12)&lt;&lt;4 | b%12);
+<a name="line5437">5437: </a>}
+<a name="line5438">5438: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5439">5439: </a>
+<a name="line5440">5440: </a><font color="#000000"><a name="kstart"></a>rkstart()</font>
+<a name="line5441">5441: </a>{
+<a name="line5442">5442: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5443">5443: </a>
+<a name="line5444">5444: </a>        <font color="#000000">if</font> ((bp = rktab.d_actf) == 0)
+<a name="line5445">5445: </a>                <font color="#000000">return</font>;
+<a name="line5446">5446: </a>        rktab.d_active++;
+<a name="line5447">5447: </a>        devstart(bp, &amp;RKADDR-&gt;rkda, rkaddr(bp), 0);
+<a name="line5448">5448: </a>}
+<a name="line5449">5449: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5450">5450: </a>
+<a name="line5451">5451: </a><font color="#000000"><a name="kintr"></a>rkintr()</font>
+<a name="line5452">5452: </a>{
+<a name="line5453">5453: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5454">5454: </a>
+<a name="line5455">5455: </a>        <font color="#000000">if</font> (rktab.d_active == 0)
+<a name="line5456">5456: </a>                <font color="#000000">return</font>;
+<a name="line5457">5457: </a>        bp = rktab.d_actf;
+<a name="line5458">5458: </a>        rktab.d_active = 0;
+<a name="line5459">5459: </a>        <font color="#000000">if</font> (RKADDR-&gt;rkcs &lt; 0) {         <font color="#800000">/* error bit */</font>
+<a name="line5460">5460: </a>                deverror(bp, RKADDR-&gt;rker, RKADDR-&gt;rkds);
+<a name="line5461">5461: </a>                RKADDR-&gt;rkcs = RESET|GO;
+<a name="line5462">5462: </a>                <font color="#000000">while</font>((RKADDR-&gt;rkcs&amp;CTLRDY) == 0) ;
+<a name="line5463">5463: </a>                <font color="#000000">if</font> (++rktab.d_errcnt &lt;= 10) {
+<a name="line5464">5464: </a>                        rkstart();
+<a name="line5465">5465: </a>                        <font color="#000000">return</font>;
+<a name="line5466">5466: </a>                }
+<a name="line5467">5467: </a>                bp-&gt;b_flags =| B_ERROR;
+<a name="line5468">5468: </a>        }
+<a name="line5469">5469: </a>        rktab.d_errcnt = 0;
+<a name="line5470">5470: </a>        rktab.d_actf = bp-&gt;av_forw;
+<a name="line5471">5471: </a>        iodone(bp);
+<a name="line5472">5472: </a>        rkstart();
+<a name="line5473">5473: </a>}
+<a name="line5474">5474: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5475">5475: </a>
+<a name="line5476">5476: </a><font color="#000000"><a name="kread"></a>rkread(dev)</font>
+<a name="line5477">5477: </a>{
+<a name="line5478">5478: </a>
+<a name="line5479">5479: </a>        physio(rkstrategy, &amp;rrkbuf, dev, B_READ);
+<a name="line5480">5480: </a>}
+<a name="line5481">5481: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5482">5482: </a>
+<a name="line5483">5483: </a><font color="#000000"><a name="kwrite"></a>rkwrite(dev)</font>
+<a name="line5484">5484: </a>{
+<a name="line5485">5485: </a>
+<a name="line5486">5486: </a>        physio(rkstrategy, &amp;rrkbuf, dev, B_WRITE);
+<a name="line5487">5487: </a>}
+<a name="line5488">5488: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

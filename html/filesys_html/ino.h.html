@@ -1,0 +1,45 @@
+
+<html>
+<head>
+<title>ino.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5600">5600: </a><font color="#800000">/*</font>
+<a name="line5601">5601: </a><font color="#800000"> * Inode structure as it appears on</font>
+<a name="line5602">5602: </a><font color="#800000"> * the disk. Not used by the system,</font>
+<a name="line5603">5603: </a><font color="#800000"> * but by things like check, df, dump.</font>
+<a name="line5604">5604: </a><font color="#800000"> */</font>
+<a name="line5605">5605: </a><font color="#000000">struct</font>  inode
+<a name="line5606">5606: </a>{
+<a name="line5607">5607: </a>        int     i_mode;
+<a name="line5608">5608: </a>        char    i_nlink;
+<a name="line5609">5609: </a>        char    i_uid;
+<a name="line5610">5610: </a>        char    i_gid;
+<a name="line5611">5611: </a>        char    i_size0;
+<a name="line5612">5612: </a>        char    *i_size1;
+<a name="line5613">5613: </a>        int     i_addr[8];
+<a name="line5614">5614: </a>        int     i_atime[2];
+<a name="line5615">5615: </a>        int     i_mtime[2];
+<a name="line5616">5616: </a>};
+<a name="line5617">5617: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5618">5618: </a>
+<a name="line5619">5619: </a><font color="#800000">/* modes */</font>
+<a name="line5620">5620: </a><font color="#000000">#define IALLOC  0100000</font>
+<a name="line5621">5621: </a><font color="#000000">#define IFMT    060000</font>
+<a name="line5622">5622: </a><font color="#000000">#define         IFDIR   040000</font>
+<a name="line5623">5623: </a><font color="#000000">#define         IFCHR   020000</font>
+<a name="line5624">5624: </a><font color="#000000">#define         IFBLK   060000</font>
+<a name="line5625">5625: </a><font color="#000000">#define ILARG   010000</font>
+<a name="line5626">5626: </a><font color="#000000">#define ISUID   04000</font>
+<a name="line5627">5627: </a><font color="#000000">#define ISGID   02000</font>
+<a name="line5628">5628: </a><font color="#000000">#define ISVTX   01000</font>
+<a name="line5629">5629: </a><font color="#000000">#define IREAD   0400</font>
+<a name="line5630">5630: </a><font color="#000000">#define IWRITE  0200</font>
+<a name="line5631">5631: </a><font color="#000000">#define IEXEC   0100</font>
+</pre>
+</body>
+
+</html>

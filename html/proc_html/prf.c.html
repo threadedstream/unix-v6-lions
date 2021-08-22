@@ -1,0 +1,170 @@
+
+<html>
+<head>
+<title>prf.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line2300">2300: </a><font color="#000000">#</font>
+<a name="line2301">2301: </a><font color="#800000">/*</font>
+<a name="line2302">2302: </a><font color="#800000"> */</font>
+<a name="line2303">2303: </a>
+<a name="line2304">2304: </a><font color="#000000">#include "../param.h"</font>
+<a name="line2305">2305: </a><font color="#000000">#include "../seg.h"</font>
+<a name="line2306">2306: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line2307">2307: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line2308">2308: </a>
+<a name="line2309">2309: </a><font color="#800000">/*</font>
+<a name="line2310">2310: </a><font color="#800000"> * Address and structure of the</font>
+<a name="line2311">2311: </a><font color="#800000"> * KL-11 console device registers.</font>
+<a name="line2312">2312: </a><font color="#800000"> */</font>
+<a name="line2313">2313: </a><font color="#000000">struct</font>
+<a name="line2314">2314: </a>{
+<a name="line2315">2315: </a>        int     rsr;
+<a name="line2316">2316: </a>        int     rbr;
+<a name="line2317">2317: </a>        int     xsr;
+<a name="line2318">2318: </a>        int     xbr;
+<a name="line2319">2319: </a>};
+<a name="line2320">2320: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2321">2321: </a>
+<a name="line2322">2322: </a><font color="#800000">/*</font>
+<a name="line2323">2323: </a><font color="#800000"> * In case console is off,</font>
+<a name="line2324">2324: </a><font color="#800000"> * panicstr contains argument to last</font>
+<a name="line2325">2325: </a><font color="#800000"> * call to panic.</font>
+<a name="line2326">2326: </a><font color="#800000"> */</font>
+<a name="line2327">2327: </a>
+<a name="line2328">2328: </a>char    *panicstr;
+<a name="line2329">2329: </a>
+<a name="line2330">2330: </a><font color="#800000">/*</font>
+<a name="line2331">2331: </a><font color="#800000"> * Scaled down version of C Library printf.</font>
+<a name="line2332">2332: </a><font color="#800000"> * Only %s %l %d (==%l) %o are recognized.</font>
+<a name="line2333">2333: </a><font color="#800000"> * Used to print diagnostic information</font>
+<a name="line2334">2334: </a><font color="#800000"> * directly on console tty.</font>
+<a name="line2335">2335: </a><font color="#800000"> * Since it is not interrupt driven,</font>
+<a name="line2336">2336: </a><font color="#800000"> * all system activities are pretty much</font>
+<a name="line2337">2337: </a><font color="#800000"> * suspended.</font>
+<a name="line2338">2338: </a><font color="#800000"> * Printf should not be used for chit-chat.</font>
+<a name="line2339">2339: </a><font color="#800000"> */</font>
+<a name="line2340">2340: </a><font color="#000000"><a name="rintf"></a>printf(fmt,x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb,xc)</font>
+<a name="line2341">2341: </a>char fmt[];
+<a name="line2342">2342: </a>{
+<a name="line2343">2343: </a>        register char *s;
+<a name="line2344">2344: </a>        register *adx, c;
+<a name="line2345">2345: </a>
+<a name="line2346">2346: </a>        adx = &amp;x1;
+<a name="line2347">2347: </a><font color="#000000">loop:</font>
+<a name="line2348">2348: </a>        <font color="#000000">while</font>((c = *fmt++) != '%') {
+<a name="line2349">2349: </a>                <font color="#000000">if</font>(c == '\0')
+<a name="line2350">2350: </a>                        <font color="#000000">return</font>;
+<a name="line2351">2351: </a>                putchar(c);
+<a name="line2352">2352: </a>        }
+<a name="line2353">2353: </a>        c = *fmt++;
+<a name="line2354">2354: </a>        <font color="#000000">if</font>(c == 'd' || c == 'l' || c == 'o')
+<a name="line2355">2355: </a>                printn(*adx, c=='o'? 8: 10);
+<a name="line2356">2356: </a>        <font color="#000000">if</font>(c == 's') {
+<a name="line2357">2357: </a>                s = *adx;
+<a name="line2358">2358: </a>                <font color="#000000">while</font>(c = *s++)
+<a name="line2359">2359: </a>                        putchar(c);
+<a name="line2360">2360: </a>        }
+<a name="line2361">2361: </a>        adx++;
+<a name="line2362">2362: </a>        <font color="#000000">goto</font> loop;
+<a name="line2363">2363: </a>}
+<a name="line2364">2364: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2365">2365: </a>
+<a name="line2366">2366: </a><font color="#800000">/*</font>
+<a name="line2367">2367: </a><font color="#800000"> * Print an unsigned integer in base b.</font>
+<a name="line2368">2368: </a><font color="#800000"> */</font>
+<a name="line2369">2369: </a><font color="#000000"><a name="rintn"></a>printn(n, b)</font>
+<a name="line2370">2370: </a>{
+<a name="line2371">2371: </a>        register a;
+<a name="line2372">2372: </a>
+<a name="line2373">2373: </a>        <font color="#000000">if</font>(a = ldiv(n, b))
+<a name="line2374">2374: </a>                printn(a, b);
+<a name="line2375">2375: </a>        putchar(lrem(n, b) + '0');
+<a name="line2376">2376: </a>}
+<a name="line2377">2377: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2378">2378: </a>
+<a name="line2379">2379: </a><font color="#800000">/*</font>
+<a name="line2380">2380: </a><font color="#800000"> * Print a character on console.</font>
+<a name="line2381">2381: </a><font color="#800000"> * Attempts to save and restore device</font>
+<a name="line2382">2382: </a><font color="#800000"> * status.</font>
+<a name="line2383">2383: </a><font color="#800000"> * If the switches are 0, all</font>
+<a name="line2384">2384: </a><font color="#800000"> * printing is inhibited.</font>
+<a name="line2385">2385: </a><font color="#800000"> */</font>
+<a name="line2386">2386: </a><font color="#000000"><a name="utchar"></a>putchar(c)</font>
+<a name="line2387">2387: </a>{
+<a name="line2388">2388: </a>        register rc, s;
+<a name="line2389">2389: </a>
+<a name="line2390">2390: </a>        rc = c;
+<a name="line2391">2391: </a>        <font color="#000000">if</font>(SW-&gt;integ == 0)
+<a name="line2392">2392: </a>                <font color="#000000">return</font>;
+<a name="line2393">2393: </a>        <font color="#000000">while</font>((KL-&gt;xsr&amp;0200) == 0)
+<a name="line2394">2394: </a>                ;
+<a name="line2395">2395: </a>        <font color="#000000">if</font>(rc == 0)
+<a name="line2396">2396: </a>                <font color="#000000">return</font>;
+<a name="line2397">2397: </a>        s = KL-&gt;xsr;
+<a name="line2398">2398: </a>        KL-&gt;xsr = 0;
+<a name="line2399">2399: </a>        KL-&gt;xbr = rc;
+<a name="line2400">2400: </a>        <font color="#000000">if</font>(rc == '\n') {
+<a name="line2401">2401: </a>                putchar('\r');
+<a name="line2402">2402: </a>                putchar(0177);
+<a name="line2403">2403: </a>                putchar(0177);
+<a name="line2404">2404: </a>        }
+<a name="line2405">2405: </a>        putchar(0);
+<a name="line2406">2406: </a>        KL-&gt;xsr = s;
+<a name="line2407">2407: </a>}
+<a name="line2408">2408: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2409">2409: </a>
+<a name="line2410">2410: </a><font color="#800000">/*</font>
+<a name="line2411">2411: </a><font color="#800000"> * Panic is called on unresolvable</font>
+<a name="line2412">2412: </a><font color="#800000"> * fatal errors.</font>
+<a name="line2413">2413: </a><font color="#800000"> * It syncs, prints "panic: mesg" and</font>
+<a name="line2414">2414: </a><font color="#800000"> * then loops.</font>
+<a name="line2415">2415: </a><font color="#800000"> */</font>
+<a name="line2416">2416: </a><font color="#000000"><a name="anic"></a>panic(s)</font>
+<a name="line2417">2417: </a>char *s;
+<a name="line2418">2418: </a>{
+<a name="line2419">2419: </a>        panicstr = s;
+<a name="line2420">2420: </a>        update();
+<a name="line2421">2421: </a>        printf(<font color="#000000">"panic: %s\n"</font>, s);
+<a name="line2422">2422: </a>        <font color="#000000">for</font>(;;)
+<a name="line2423">2423: </a>                idle();
+<a name="line2424">2424: </a>}
+<a name="line2425">2425: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2426">2426: </a>
+<a name="line2427">2427: </a><font color="#800000">/*</font>
+<a name="line2428">2428: </a><font color="#800000"> * prdev prints a warning message of the</font>
+<a name="line2429">2429: </a><font color="#800000"> * form "mesg on dev x/y".</font>
+<a name="line2430">2430: </a><font color="#800000"> * x and y are the major and minor parts of</font>
+<a name="line2431">2431: </a><font color="#800000"> * the device argument.</font>
+<a name="line2432">2432: </a><font color="#800000"> */</font>
+<a name="line2433">2433: </a><font color="#000000"><a name="rdev"></a>prdev(str, dev)</font>
+<a name="line2434">2434: </a>{
+<a name="line2435">2435: </a>
+<a name="line2436">2436: </a>        printf(<font color="#000000">"%s on dev %l/%l\n"</font>, str, dev.d_major, dev.d_minor);
+<a name="line2437">2437: </a>}
+<a name="line2438">2438: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2439">2439: </a>
+<a name="line2440">2440: </a><font color="#800000">/*</font>
+<a name="line2441">2441: </a><font color="#800000"> * deverr prints a diagnostic from</font>
+<a name="line2442">2442: </a><font color="#800000"> * a device driver.</font>
+<a name="line2443">2443: </a><font color="#800000"> * It prints the device, block number,</font>
+<a name="line2444">2444: </a><font color="#800000"> * and an octal word (usually some error</font>
+<a name="line2445">2445: </a><font color="#800000"> * status register) passed as argument.</font>
+<a name="line2446">2446: </a><font color="#800000"> */</font>
+<a name="line2447">2447: </a><font color="#000000"><a name="everror"></a>deverror(bp, o1, o2)</font>
+<a name="line2448">2448: </a>int *bp;
+<a name="line2449">2449: </a>{
+<a name="line2450">2450: </a>        register *rbp;
+<a name="line2451">2451: </a>
+<a name="line2452">2452: </a>        rbp = bp;
+<a name="line2453">2453: </a>        prdev(<font color="#000000">"err"</font>, rbp-&gt;b_dev);
+<a name="line2454">2454: </a>        printf(<font color="#000000">"bn%l er%o %o\n"</font>, rbp-&gt;b_blkno, o1, o2);
+<a name="line2455">2455: </a>}
+<a name="line2456">2456: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

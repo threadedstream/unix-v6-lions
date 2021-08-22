@@ -1,0 +1,103 @@
+
+<html>
+<head>
+<title>malloc.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line2500">2500: </a><font color="#000000">#</font>
+<a name="line2501">2501: </a><font color="#800000">/*</font>
+<a name="line2502">2502: </a><font color="#800000"> */</font>
+<a name="line2503">2503: </a>
+<a name="line2504">2504: </a><font color="#800000">/*</font>
+<a name="line2505">2505: </a><font color="#800000"> * Structure of the coremap and swapmap</font>
+<a name="line2506">2506: </a><font color="#800000"> * arrays. Consists of non-zero count</font>
+<a name="line2507">2507: </a><font color="#800000"> * and base address of that many</font>
+<a name="line2508">2508: </a><font color="#800000"> * contiguous units.</font>
+<a name="line2509">2509: </a><font color="#800000"> * (The coremap unit is 64 bytes,</font>
+<a name="line2510">2510: </a><font color="#800000"> * the swapmap unit is 512 bytes)</font>
+<a name="line2511">2511: </a><font color="#800000"> * The addresses are increasing and</font>
+<a name="line2512">2512: </a><font color="#800000"> * the list is terminated with the</font>
+<a name="line2513">2513: </a><font color="#800000"> * first zero count.</font>
+<a name="line2514">2514: </a><font color="#800000"> */</font>
+<a name="line2515">2515: </a><font color="#000000"><a name="map"></a>struct map</font>
+<a name="line2516">2516: </a>{
+<a name="line2517">2517: </a>        char *m_size;
+<a name="line2518">2518: </a>        char *m_addr;
+<a name="line2519">2519: </a>};
+<a name="line2520">2520: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2521">2521: </a>
+<a name="line2522">2522: </a><font color="#800000">/*</font>
+<a name="line2523">2523: </a><font color="#800000"> * Allocate size units from the given</font>
+<a name="line2524">2524: </a><font color="#800000"> * map. Return the base of the allocated</font>
+<a name="line2525">2525: </a><font color="#800000"> * space.</font>
+<a name="line2526">2526: </a><font color="#800000"> * Algorithm is first fit.</font>
+<a name="line2527">2527: </a><font color="#800000"> */</font>
+<a name="line2528">2528: </a><font color="#000000"><a name="alloc"></a>malloc(mp, size)</font>
+<a name="line2529">2529: </a><font color="#000000"><a name="map"></a>struct map </font>*mp;
+<a name="line2530">2530: </a>{
+<a name="line2531">2531: </a>        register int a;
+<a name="line2532">2532: </a>        register <font color="#000000">struct map</font> *bp;
+<a name="line2533">2533: </a>
+<a name="line2534">2534: </a>        <font color="#000000">for</font> (bp = mp; bp-&gt;m_size; bp++) {
+<a name="line2535">2535: </a>                <font color="#000000">if</font> (bp-&gt;m_size &gt;= size) {
+<a name="line2536">2536: </a>                        a = bp-&gt;m_addr;
+<a name="line2537">2537: </a>                        bp-&gt;m_addr =+ size;
+<a name="line2538">2538: </a>                        <font color="#000000">if</font> ((bp-&gt;m_size =- size) == 0)
+<a name="line2539">2539: </a>                                <font color="#000000">do</font> {
+<a name="line2540">2540: </a>                                        bp++;
+<a name="line2541">2541: </a>                                        (bp-1)-&gt;m_addr = bp-&gt;m_addr;
+<a name="line2542">2542: </a>                                } <font color="#000000">while</font> ((bp-1)-&gt;m_size = bp-&gt;m_size);
+<a name="line2543">2543: </a>                        <font color="#000000">return</font>(a);
+<a name="line2544">2544: </a>                }
+<a name="line2545">2545: </a>        }
+<a name="line2546">2546: </a>        <font color="#000000">return</font>(0);
+<a name="line2547">2547: </a>}
+<a name="line2548">2548: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2549">2549: </a>
+<a name="line2550">2550: </a><font color="#800000">/*</font>
+<a name="line2551">2551: </a><font color="#800000"> * Free the previously allocated space aa</font>
+<a name="line2552">2552: </a><font color="#800000"> * of size units into the specified map.</font>
+<a name="line2553">2553: </a><font color="#800000"> * Sort aa into map and combine on</font>
+<a name="line2554">2554: </a><font color="#800000"> * one or both ends if possible.</font>
+<a name="line2555">2555: </a><font color="#800000"> */</font>
+<a name="line2556">2556: </a><font color="#000000"><a name="free"></a>mfree(mp, size, aa)</font>
+<a name="line2557">2557: </a><font color="#000000"><a name="map"></a>struct map </font>*mp;
+<a name="line2558">2558: </a>{
+<a name="line2559">2559: </a>        register <font color="#000000">struct map</font> *bp;
+<a name="line2560">2560: </a>        register int t;
+<a name="line2561">2561: </a>        register int a;
+<a name="line2562">2562: </a>
+<a name="line2563">2563: </a>        a = aa;
+<a name="line2564">2564: </a>        <font color="#000000">for</font> (bp = mp; bp-&gt;m_addr&lt;=a &amp;&amp; bp-&gt;m_size!=0; bp++);
+<a name="line2565">2565: </a>        <font color="#000000">if</font> (bp&gt;mp &amp;&amp; (bp-1)-&gt;m_addr+(bp-1)-&gt;m_size == a) {
+<a name="line2566">2566: </a>                (bp-1)-&gt;m_size =+ size;
+<a name="line2567">2567: </a>                <font color="#000000">if</font> (a+size == bp-&gt;m_addr) {
+<a name="line2568">2568: </a>                        (bp-1)-&gt;m_size =+ bp-&gt;m_size;
+<a name="line2569">2569: </a>                        <font color="#000000">while</font> (bp-&gt;m_size) {
+<a name="line2570">2570: </a>                                bp++;
+<a name="line2571">2571: </a>                                (bp-1)-&gt;m_addr = bp-&gt;m_addr;
+<a name="line2572">2572: </a>                                (bp-1)-&gt;m_size = bp-&gt;m_size;
+<a name="line2573">2573: </a>                        }
+<a name="line2574">2574: </a>                }
+<a name="line2575">2575: </a>        } <font color="#000000">else</font> {
+<a name="line2576">2576: </a>                <font color="#000000">if</font> (a+size == bp-&gt;m_addr &amp;&amp; bp-&gt;m_size) {
+<a name="line2577">2577: </a>                        bp-&gt;m_addr =- size;
+<a name="line2578">2578: </a>                        bp-&gt;m_size =+ size;
+<a name="line2579">2579: </a>                } <font color="#000000">else</font> <font color="#000000">if</font> (size) <font color="#000000">do</font> {
+<a name="line2580">2580: </a>                        t = bp-&gt;m_addr;
+<a name="line2581">2581: </a>                        bp-&gt;m_addr = a;
+<a name="line2582">2582: </a>                        a = t;
+<a name="line2583">2583: </a>                        t = bp-&gt;m_size;
+<a name="line2584">2584: </a>                        bp-&gt;m_size = size;
+<a name="line2585">2585: </a>                        bp++;
+<a name="line2586">2586: </a>                } <font color="#000000">while</font> (size = t);
+<a name="line2587">2587: </a>        }
+<a name="line2588">2588: </a>}
+<a name="line2589">2589: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

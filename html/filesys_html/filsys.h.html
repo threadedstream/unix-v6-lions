@@ -1,0 +1,41 @@
+
+<html>
+<head>
+<title>filsys.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5550">5550: </a><font color="#800000">/*</font>
+<a name="line5551">5551: </a><font color="#800000"> * Definition of the unix super block.</font>
+<a name="line5552">5552: </a><font color="#800000"> * The root super block is allocated and</font>
+<a name="line5553">5553: </a><font color="#800000"> * read in iinit/alloc.c. Subsequently</font>
+<a name="line5554">5554: </a><font color="#800000"> * a super block is allocated and read</font>
+<a name="line5555">5555: </a><font color="#800000"> * with each mount (smount/sys3.c) and</font>
+<a name="line5556">5556: </a><font color="#800000"> * released with unmount (sumount/sys3.c).</font>
+<a name="line5557">5557: </a><font color="#800000"> * A disk block is ripped off for storage.</font>
+<a name="line5558">5558: </a><font color="#800000"> * See alloc.c for general alloc/free</font>
+<a name="line5559">5559: </a><font color="#800000"> * routines for free list and I list.</font>
+<a name="line5560">5560: </a><font color="#800000"> */</font>
+<a name="line5561">5561: </a><font color="#000000">struct</font>  filsys
+<a name="line5562">5562: </a>{
+<a name="line5563">5563: </a>        int     s_isize;        <font color="#800000">/* size in blocks of I list */</font>
+<a name="line5564">5564: </a>        int     s_fsize;        <font color="#800000">/* size in blocks of entire volume */</font>
+<a name="line5565">5565: </a>        int     s_nfree;        <font color="#800000">/* number of in core free blocks (0-100) */</font>
+<a name="line5566">5566: </a>
+<a name="line5567">5567: </a>        int     s_free[100];    <font color="#800000">/* in core free blocks */</font>
+<a name="line5568">5568: </a>        int     s_ninode;       <font color="#800000">/* number of in core I nodes (0-100) */</font>
+<a name="line5569">5569: </a>        int     s_inode[100];   <font color="#800000">/* in core free I nodes */</font>
+<a name="line5570">5570: </a>        char    s_flock;        <font color="#800000">/* lock during free list manipulation */</font>
+<a name="line5571">5571: </a>        char    s_ilock;        <font color="#800000">/* lock during I list manipulation */</font>
+<a name="line5572">5572: </a>        char    s_fmod;         <font color="#800000">/* super block modified flag */</font>
+<a name="line5573">5573: </a>        char    s_ronly;        <font color="#800000">/* mounted read-only flag */</font>
+<a name="line5574">5574: </a>        int     s_time[2];      <font color="#800000">/* current date of last update */</font>
+<a name="line5575">5575: </a>        int     pad[50];
+<a name="line5576">5576: </a>};
+<a name="line5577">5577: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

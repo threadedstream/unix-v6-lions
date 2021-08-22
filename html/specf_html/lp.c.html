@@ -1,0 +1,209 @@
+
+<html>
+<head>
+<title>lp.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line8800">8800: </a><font color="#000000">#</font>
+<a name="line8801">8801: </a><font color="#800000">/*</font>
+<a name="line8802">8802: </a><font color="#800000"> */</font>
+<a name="line8803">8803: </a>
+<a name="line8804">8804: </a><font color="#800000">/*</font>
+<a name="line8805">8805: </a><font color="#800000"> * LP-11 Line printer driver</font>
+<a name="line8806">8806: </a><font color="#800000"> */</font>
+<a name="line8807">8807: </a>
+<a name="line8808">8808: </a><font color="#000000">#include "../param.h"</font>
+<a name="line8809">8809: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line8810">8810: </a><font color="#000000">#include "../user.h"</font>
+<a name="line8811">8811: </a>
+<a name="line8812">8812: </a><font color="#000000">#define LPADDR  0177514</font>
+<a name="line8813">8813: </a>
+<a name="line8814">8814: </a><font color="#000000">#define IENABLE 0100</font>
+<a name="line8815">8815: </a><font color="#000000">#define DONE    0200</font>
+<a name="line8816">8816: </a>
+<a name="line8817">8817: </a><font color="#000000">#define LPPRI   10</font>
+<a name="line8818">8818: </a><font color="#000000">#define LPLWAT  50</font>
+<a name="line8819">8819: </a><font color="#000000">#define LPHWAT  100</font>
+<a name="line8820">8820: </a><font color="#000000">#define EJLINE  60</font>
+<a name="line8821">8821: </a><font color="#000000">#define MAXCOL  80</font>
+<a name="line8822">8822: </a>
+<a name="line8823">8823: </a><font color="#000000">struct</font> {
+<a name="line8824">8824: </a>        int lpsr;
+<a name="line8825">8825: </a>        int lpbuf;
+<a name="line8826">8826: </a>};
+<a name="line8827">8827: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8828">8828: </a>
+<a name="line8829">8829: </a><font color="#000000">struct</font>  {
+<a name="line8830">8830: </a>        int     cc;
+<a name="line8831">8831: </a>        int     cf;
+<a name="line8832">8832: </a>        int     cl;
+<a name="line8833">8833: </a>        int     flag;
+<a name="line8834">8834: </a>        int     mcc;
+<a name="line8835">8835: </a>        int     ccc;
+<a name="line8836">8836: </a>        int     mlc;
+<a name="line8837">8837: </a>} lp11;
+<a name="line8838">8838: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8839">8839: </a>
+<a name="line8840">8840: </a><font color="#000000">#define CAP     01              </font><font color="#800000">/* Set to 0 for 96-char printer, else to 01 */</font><font color="#000000"></font>
+<a name="line8841">8841: </a>
+<a name="line8842">8842: </a><font color="#000000">#define EJECT   02</font>
+<a name="line8843">8843: </a><font color="#000000">#define OPEN    04</font>
+<a name="line8844">8844: </a><font color="#000000">#define IND     010             </font><font color="#800000">/* Set to 0 for no indent, else to 010 */</font><font color="#000000"></font>
+<a name="line8845">8845: </a>
+<a name="line8846">8846: </a>
+<a name="line8847">8847: </a><font color="#000000">#define FORM    014</font>
+<a name="line8848">8848: </a>
+<a name="line8849">8849: </a>
+<a name="line8850">8850: </a><font color="#000000"><a name="popen"></a>lpopen(dev, flag)</font>
+<a name="line8851">8851: </a>{
+<a name="line8852">8852: </a>
+<a name="line8853">8853: </a>        <font color="#000000">if</font>(lp11.flag &amp; OPEN || LPADDR-&gt;lpsr &lt; 0) {
+<a name="line8854">8854: </a>                u.u_error = EIO;
+<a name="line8855">8855: </a>                <font color="#000000">return</font>;
+<a name="line8856">8856: </a>        }
+<a name="line8857">8857: </a>        lp11.flag =| (IND|EJECT|OPEN);
+<a name="line8858">8858: </a>        LPADDR-&gt;lpsr =| IENABLE;
+<a name="line8859">8859: </a>        lpcanon(FORM);
+<a name="line8860">8860: </a>}
+<a name="line8861">8861: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8862">8862: </a>
+<a name="line8863">8863: </a><font color="#000000"><a name="pclose"></a>lpclose(dev, flag)</font>
+<a name="line8864">8864: </a>{
+<a name="line8865">8865: </a>        lpcanon(FORM);
+<a name="line8866">8866: </a>        lp11.flag = 0;
+<a name="line8867">8867: </a>}
+<a name="line8868">8868: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8869">8869: </a>
+<a name="line8870">8870: </a><font color="#000000"><a name="pwrite"></a>lpwrite()</font>
+<a name="line8871">8871: </a>{
+<a name="line8872">8872: </a>        register int c;
+<a name="line8873">8873: </a>
+<a name="line8874">8874: </a>        <font color="#000000">while</font> ((c=cpass())&gt;=0)
+<a name="line8875">8875: </a>                lpcanon(c);
+<a name="line8876">8876: </a>}
+<a name="line8877">8877: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8878">8878: </a>
+<a name="line8879">8879: </a><font color="#000000"><a name="pcanon"></a>lpcanon(c)</font>
+<a name="line8880">8880: </a>{
+<a name="line8881">8881: </a>        register c1, c2;
+<a name="line8882">8882: </a>
+<a name="line8883">8883: </a>        c1 = c;
+<a name="line8884">8884: </a>        <font color="#000000">if</font>(lp11.flag&amp;CAP) {
+<a name="line8885">8885: </a>                <font color="#000000">if</font>(c1&gt;='a' &amp;&amp; c1&lt;='z')
+<a name="line8886">8886: </a>                        c1 =+ 'A'-'a'; <font color="#000000">else</font>
+<a name="line8887">8887: </a>                <font color="#000000">switch</font>(c1) {
+<a name="line8888">8888: </a>
+<a name="line8889">8889: </a>                <font color="#000000">case</font> '{':
+<a name="line8890">8890: </a>                        c2 = '(';
+<a name="line8891">8891: </a>                        <font color="#000000">goto</font> esc;
+<a name="line8892">8892: </a>
+<a name="line8893">8893: </a>                <font color="#000000">case</font> '}':
+<a name="line8894">8894: </a>                        c2 = ')';
+<a name="line8895">8895: </a>                        <font color="#000000">goto</font> esc;
+<a name="line8896">8896: </a>
+<a name="line8897">8897: </a>                <font color="#000000">case</font> '`':
+<a name="line8898">8898: </a>                        c2 = '\'';
+<a name="line8899">8899: </a>                        <font color="#000000">goto</font> esc;
+<a name="line8900">8900: </a>
+<a name="line8901">8901: </a>                <font color="#000000">case</font> '|':
+<a name="line8902">8902: </a>                        c2 = '!';
+<a name="line8903">8903: </a>                        <font color="#000000">goto</font> esc;
+<a name="line8904">8904: </a>
+<a name="line8905">8905: </a>                <font color="#000000">case</font> '~':
+<a name="line8906">8906: </a>                        c2 = '^';
+<a name="line8907">8907: </a>
+<a name="line8908">8908: </a><font color="#000000">                esc:</font>
+<a name="line8909">8909: </a>                        lpcanon(c2);
+<a name="line8910">8910: </a>                        lp11.ccc--;
+<a name="line8911">8911: </a>                        c1 = '-';
+<a name="line8912">8912: </a>                }
+<a name="line8913">8913: </a>        }
+<a name="line8914">8914: </a>
+<a name="line8915">8915: </a>        <font color="#000000">switch</font>(c1) {
+<a name="line8916">8916: </a>
+<a name="line8917">8917: </a>        <font color="#000000">case</font> '\t':
+<a name="line8918">8918: </a>                lp11.ccc = (lp11.ccc+8) &amp; ~7;
+<a name="line8919">8919: </a>                <font color="#000000">return</font>;
+<a name="line8920">8920: </a>
+<a name="line8921">8921: </a>        <font color="#000000">case</font> FORM:
+<a name="line8922">8922: </a>        <font color="#000000">case</font> '\n':
+<a name="line8923">8923: </a>                <font color="#000000">if</font>((lp11.flag&amp;EJECT) == 0 ||
+<a name="line8924">8924: </a>                   lp11.mcc!=0 || lp11.mlc!=0) {
+<a name="line8925">8925: </a>                        lp11.mcc = 0;
+<a name="line8926">8926: </a>                        lp11.mlc++;
+<a name="line8927">8927: </a>                        <font color="#000000">if</font>(lp11.mlc &gt;= EJLINE &amp;&amp; lp11.flag&amp;EJECT)
+<a name="line8928">8928: </a>                                c1 = FORM;
+<a name="line8929">8929: </a>                        lpoutput(c1);
+<a name="line8930">8930: </a>                        <font color="#000000">if</font>(c1 == FORM)
+<a name="line8931">8931: </a>                                lp11.mlc = 0;
+<a name="line8932">8932: </a>                }
+<a name="line8933">8933: </a>
+<a name="line8934">8934: </a>        <font color="#000000">case</font> '\r':
+<a name="line8935">8935: </a>                lp11.ccc = 0;
+<a name="line8936">8936: </a>                <font color="#000000">if</font>(lp11.flag&amp;IND)
+<a name="line8937">8937: </a>                        lp11.ccc = 8;
+<a name="line8938">8938: </a>                <font color="#000000">return</font>;
+<a name="line8939">8939: </a>
+<a name="line8940">8940: </a>        <font color="#000000">case</font> 010:
+<a name="line8941">8941: </a>                <font color="#000000">if</font>(lp11.ccc &gt; 0)
+<a name="line8942">8942: </a>                        lp11.ccc--;
+<a name="line8943">8943: </a>                <font color="#000000">return</font>;
+<a name="line8944">8944: </a>
+<a name="line8945">8945: </a>        <font color="#000000">case</font> ' ':
+<a name="line8946">8946: </a>                lp11.ccc++;
+<a name="line8947">8947: </a>                <font color="#000000">return</font>;
+<a name="line8948">8948: </a>
+<a name="line8949">8949: </a><font color="#000000">        default:</font>
+<a name="line8950">8950: </a>                <font color="#000000">if</font>(lp11.ccc &lt; lp11.mcc) {
+<a name="line8951">8951: </a>                        lpoutput('\r');
+<a name="line8952">8952: </a>                        lp11.mcc = 0;
+<a name="line8953">8953: </a>                }
+<a name="line8954">8954: </a>                <font color="#000000">if</font>(lp11.ccc &lt; MAXCOL) {
+<a name="line8955">8955: </a>                        <font color="#000000">while</font>(lp11.ccc &gt; lp11.mcc) {
+<a name="line8956">8956: </a>                                lpoutput(' ');
+<a name="line8957">8957: </a>                                lp11.mcc++;
+<a name="line8958">8958: </a>                        }
+<a name="line8959">8959: </a>                        lpoutput(c1);
+<a name="line8960">8960: </a>                        lp11.mcc++;
+<a name="line8961">8961: </a>                }
+<a name="line8962">8962: </a>                lp11.ccc++;
+<a name="line8963">8963: </a>        }
+<a name="line8964">8964: </a>}
+<a name="line8965">8965: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8966">8966: </a>
+<a name="line8967">8967: </a><font color="#000000"><a name="pstart"></a>lpstart()</font>
+<a name="line8968">8968: </a>{
+<a name="line8969">8969: </a>        register int c;
+<a name="line8970">8970: </a>
+<a name="line8971">8971: </a>        <font color="#000000">while</font> (LPADDR-&gt;lpsr&amp;DONE &amp;&amp; (c = getc(&amp;lp11)) &gt;= 0)
+<a name="line8972">8972: </a>                LPADDR-&gt;lpbuf = c;
+<a name="line8973">8973: </a>}
+<a name="line8974">8974: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8975">8975: </a>
+<a name="line8976">8976: </a><font color="#000000"><a name="pint"></a>lpint()</font>
+<a name="line8977">8977: </a>{
+<a name="line8978">8978: </a>        register int c;
+<a name="line8979">8979: </a>
+<a name="line8980">8980: </a>        lpstart();
+<a name="line8981">8981: </a>        <font color="#000000">if</font> (lp11.cc == LPLWAT || lp11.cc == 0)
+<a name="line8982">8982: </a>                wakeup(&amp;lp11);
+<a name="line8983">8983: </a>}
+<a name="line8984">8984: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8985">8985: </a>
+<a name="line8986">8986: </a><font color="#000000"><a name="poutput"></a>lpoutput(c)</font>
+<a name="line8987">8987: </a>{
+<a name="line8988">8988: </a>        <font color="#000000">if</font> (lp11.cc &gt;= LPHWAT)
+<a name="line8989">8989: </a>                sleep(&amp;lp11, LPPRI);
+<a name="line8990">8990: </a>        putc(c, &amp;lp11);
+<a name="line8991">8991: </a>        spl4();
+<a name="line8992">8992: </a>        lpstart();
+<a name="line8993">8993: </a>        spl0();
+<a name="line8994">8994: </a>}
+<a name="line8995">8995: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

@@ -1,0 +1,110 @@
+
+<html>
+<head>
+<title>user.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line400">0400: </a><font color="#800000">/*</font>
+<a name="line401">0401: </a><font color="#800000"> * The user structure.</font>
+<a name="line402">0402: </a><font color="#800000"> * One allocated per process.</font>
+<a name="line403">0403: </a><font color="#800000"> * Contains all per process data</font>
+<a name="line404">0404: </a><font color="#800000"> * that doesn't need to be referenced</font>
+<a name="line405">0405: </a><font color="#800000"> * while the process is swapped.</font>
+<a name="line406">0406: </a><font color="#800000"> * The user block is USIZE*64 bytes</font>
+<a name="line407">0407: </a><font color="#800000"> * long; resides at virtual kernel</font>
+<a name="line408">0408: </a><font color="#800000"> * loc 140000; contains the system</font>
+<a name="line409">0409: </a><font color="#800000"> * stack per user; is cross referenced</font>
+<a name="line410">0410: </a><font color="#800000"> * with the proc structure for the</font>
+<a name="line411">0411: </a><font color="#800000"> * same process.</font>
+<a name="line412">0412: </a><font color="#800000"> */</font>
+<a name="line413">0413: </a><font color="#000000"><a name="user"></a>struct user</font>
+<a name="line414">0414: </a>{
+<a name="line415">0415: </a>        int     u_rsav[2];              <font color="#800000">/* save r5,r6 when exchanging stacks */</font>
+<a name="line416">0416: </a>        int     u_fsav[25];             <font color="#800000">/* save fp registers */</font>
+<a name="line417">0417: </a>                                        <font color="#800000">/* rsav and fsav must be first in structure */</font>
+<a name="line418">0418: </a>        char    u_segflg;               <font color="#800000">/* flag for IO; user or kernel space */</font>
+<a name="line419">0419: </a>        char    u_error;                <font color="#800000">/* return error code */</font>
+<a name="line420">0420: </a>        char    u_uid;                  <font color="#800000">/* effective user id */</font>
+<a name="line421">0421: </a>        char    u_gid;                  <font color="#800000">/* effective group id */</font>
+<a name="line422">0422: </a>        char    u_ruid;                 <font color="#800000">/* real user id */</font>
+<a name="line423">0423: </a>        char    u_rgid;                 <font color="#800000">/* real group id */</font>
+<a name="line424">0424: </a>        int     u_procp;                <font color="#800000">/* pointer to proc structure */</font>
+<a name="line425">0425: </a>        char    *u_base;                <font color="#800000">/* base address for IO */</font>
+<a name="line426">0426: </a>        char    *u_count;               <font color="#800000">/* bytes remaining for IO */</font>
+<a name="line427">0427: </a>        char    *u_offset[2];           <font color="#800000">/* offset in file for IO */</font>
+<a name="line428">0428: </a>        int     *u_cdir;                <font color="#800000">/* pointer to inode of current directory */</font>
+<a name="line429">0429: </a>        char    u_dbuf[DIRSIZ];         <font color="#800000">/* current pathname component */</font>
+<a name="line430">0430: </a>        char    *u_dirp;                <font color="#800000">/* current pointer to inode */</font>
+<a name="line431">0431: </a>        <font color="#000000">struct</font>  {                       <font color="#800000">/* current directory entry */</font>
+<a name="line432">0432: </a>                int     u_ino;
+<a name="line433">0433: </a>                char    u_name[DIRSIZ];
+<a name="line434">0434: </a>        } u_dent;
+<a name="line435">0435: </a>        int     *u_pdir;                <font color="#800000">/* inode of parent directory of dirp */</font>
+<a name="line436">0436: </a>        int     u_uisa[16];             <font color="#800000">/* prototype of segmentation addresses */</font>
+<a name="line437">0437: </a>        int     u_uisd[16];             <font color="#800000">/* prototype of segmentation descriptors */</font>
+<a name="line438">0438: </a>        int     u_ofile[NOFILE];        <font color="#800000">/* pointers to file structures of open files */</font>
+<a name="line439">0439: </a>        int     u_arg[5];               <font color="#800000">/* arguments to current system call */</font>
+<a name="line440">0440: </a>        int     u_tsize;                <font color="#800000">/* text size (*64) */</font>
+<a name="line441">0441: </a>        int     u_dsize;                <font color="#800000">/* data size (*64) */</font>
+<a name="line442">0442: </a>        int     u_ssize;                <font color="#800000">/* stack size (*64) */</font>
+<a name="line443">0443: </a>        int     u_sep;                  <font color="#800000">/* flag for I and D separation */</font>
+<a name="line444">0444: </a>        int     u_qsav[2];              <font color="#800000">/* label variable for quits and interrupts */</font>
+<a name="line445">0445: </a>        int     u_ssav[2];              <font color="#800000">/* label variable for swapping */</font>
+<a name="line446">0446: </a>        int     u_signal[NSIG];         <font color="#800000">/* disposition of signals */</font>
+<a name="line447">0447: </a>        int     u_utime;                <font color="#800000">/* this process user time */</font>
+<a name="line448">0448: </a>        int     u_stime;                <font color="#800000">/* this process system time */</font>
+<a name="line449">0449: </a>        int     u_cutime[2];            <font color="#800000">/* sum of childs' utimes */</font>
+<a name="line450">0450: </a>        int     u_cstime[2];            <font color="#800000">/* sum of childs' stimes */</font>
+<a name="line451">0451: </a>        int     *u_ar0;                 <font color="#800000">/* address of users saved R0 */</font>
+<a name="line452">0452: </a>        int     u_prof[4];              <font color="#800000">/* profile arguments */</font>
+<a name="line453">0453: </a>        char    u_intflg;               <font color="#800000">/* catch intr from sys */</font>
+<a name="line454">0454: </a>                                        <font color="#800000">/* kernel stack per user</font>
+<a name="line455">0455: </a><font color="#800000">                                         * extends from u + USIZE*64</font>
+<a name="line456">0456: </a><font color="#800000">                                         * backward not to reach here</font>
+<a name="line457">0457: </a><font color="#800000">                                         */</font>
+<a name="line458">0458: </a>} u;
+<a name="line459">0459: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line460">0460: </a>
+<a name="line461">0461: </a><font color="#800000">/* u_error codes */</font>
+<a name="line462">0462: </a>
+<a name="line463">0463: </a>
+<a name="line464">0464: </a>
+<a name="line465">0465: </a><font color="#000000">#define EFAULT  106</font>
+<a name="line466">0466: </a><font color="#000000">#define EPERM   1</font>
+<a name="line467">0467: </a><font color="#000000">#define ENOENT  2</font>
+<a name="line468">0468: </a><font color="#000000">#define ESRCH   3</font>
+<a name="line469">0469: </a><font color="#000000">#define EINTR   4</font>
+<a name="line470">0470: </a><font color="#000000">#define EIO     5</font>
+<a name="line471">0471: </a><font color="#000000">#define ENXIO   6</font>
+<a name="line472">0472: </a><font color="#000000">#define E2BIG   7</font>
+<a name="line473">0473: </a><font color="#000000">#define ENOEXEC 8</font>
+<a name="line474">0474: </a><font color="#000000">#define EBADF   9</font>
+<a name="line475">0475: </a><font color="#000000">#define ECHILD  10</font>
+<a name="line476">0476: </a><font color="#000000">#define EAGAIN  11</font>
+<a name="line477">0477: </a><font color="#000000">#define ENOMEM  12</font>
+<a name="line478">0478: </a><font color="#000000">#define EACCES  13</font>
+<a name="line479">0479: </a><font color="#000000">#define ENOTBLK 15</font>
+<a name="line480">0480: </a><font color="#000000">#define EBUSY   16</font>
+<a name="line481">0481: </a><font color="#000000">#define EEXIST  17</font>
+<a name="line482">0482: </a><font color="#000000">#define EXDEV   18</font>
+<a name="line483">0483: </a><font color="#000000">#define ENODEV  19</font>
+<a name="line484">0484: </a><font color="#000000">#define ENOTDIR 20</font>
+<a name="line485">0485: </a><font color="#000000">#define EISDIR  21</font>
+<a name="line486">0486: </a><font color="#000000">#define EINVAL  22</font>
+<a name="line487">0487: </a><font color="#000000">#define ENFILE  23</font>
+<a name="line488">0488: </a><font color="#000000">#define EMFILE  24</font>
+<a name="line489">0489: </a><font color="#000000">#define ENOTTY  25</font>
+<a name="line490">0490: </a><font color="#000000">#define ETXTBSY 26</font>
+<a name="line491">0491: </a><font color="#000000">#define EFBIG   27</font>
+<a name="line492">0492: </a><font color="#000000">#define ENOSPC  28</font>
+<a name="line493">0493: </a><font color="#000000">#define ESPIPE  29</font>
+<a name="line494">0494: </a><font color="#000000">#define EROFS   30</font>
+<a name="line495">0495: </a><font color="#000000">#define EMLINK  31</font>
+<a name="line496">0496: </a><font color="#000000">#define EPIPE   32</font>
+</pre>
+</body>
+
+</html>

@@ -1,0 +1,411 @@
+
+<html>
+<head>
+<title>sys1.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line3000">3000: </a><font color="#000000">#</font>
+<a name="line3001">3001: </a><font color="#000000">#include "../param.h"</font>
+<a name="line3002">3002: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line3003">3003: </a><font color="#000000">#include "../user.h"</font>
+<a name="line3004">3004: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line3005">3005: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line3006">3006: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line3007">3007: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line3008">3008: </a>
+<a name="line3009">3009: </a><font color="#800000">/*</font>
+<a name="line3010">3010: </a><font color="#800000"> * exec system call.</font>
+<a name="line3011">3011: </a><font color="#800000"> * Because of the fact that an I/O buffer is used</font>
+<a name="line3012">3012: </a><font color="#800000"> * to store the caller's arguments during exec,</font>
+<a name="line3013">3013: </a><font color="#800000"> * and more buffers are needed to read in the text file,</font>
+<a name="line3014">3014: </a><font color="#800000"> * deadly embraces waiting for free buffers are possible.</font>
+<a name="line3015">3015: </a><font color="#800000"> * Therefore the number of processes simultaneously</font>
+<a name="line3016">3016: </a><font color="#800000"> * running in exec has to be limited to NEXEC.</font>
+<a name="line3017">3017: </a><font color="#800000"> */</font>
+<a name="line3018">3018: </a><font color="#000000">#define EXPRI   -1</font>
+<a name="line3019">3019: </a>
+<a name="line3020">3020: </a><font color="#000000"><a name="xec"></a>exec()</font>
+<a name="line3021">3021: </a>{
+<a name="line3022">3022: </a>        int ap, na, nc, *bp;
+<a name="line3023">3023: </a>        int ts, ds, sep;
+<a name="line3024">3024: </a>        register c, *ip;
+<a name="line3025">3025: </a>        register char *cp;
+<a name="line3026">3026: </a>        extern uchar;
+<a name="line3027">3027: </a>
+<a name="line3028">3028: </a>        <font color="#800000">/*</font>
+<a name="line3029">3029: </a><font color="#800000">         * pick up file names</font>
+<a name="line3030">3030: </a><font color="#800000">         * and check various modes</font>
+<a name="line3031">3031: </a><font color="#800000">         * for execute permission</font>
+<a name="line3032">3032: </a><font color="#800000">         */</font>
+<a name="line3033">3033: </a>
+<a name="line3034">3034: </a>        ip = namei(&amp;uchar, 0);
+<a name="line3035">3035: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line3036">3036: </a>                <font color="#000000">return</font>;
+<a name="line3037">3037: </a>        <font color="#000000">while</font>(execnt &gt;= NEXEC)
+<a name="line3038">3038: </a>                sleep(&amp;execnt, EXPRI);
+<a name="line3039">3039: </a>        execnt++;
+<a name="line3040">3040: </a>        bp = getblk(NODEV);
+<a name="line3041">3041: </a>        <font color="#000000">if</font>(access(ip, IEXEC) || (ip-&gt;i_mode&amp;IFMT)!=0)
+<a name="line3042">3042: </a>                <font color="#000000">goto</font> bad;
+<a name="line3043">3043: </a>
+<a name="line3044">3044: </a>        <font color="#800000">/*</font>
+<a name="line3045">3045: </a><font color="#800000">         * pack up arguments into</font>
+<a name="line3046">3046: </a><font color="#800000">         * allocated disk buffer</font>
+<a name="line3047">3047: </a><font color="#800000">         */</font>
+<a name="line3048">3048: </a>
+<a name="line3049">3049: </a>        cp = bp-&gt;b_addr;
+<a name="line3050">3050: </a>        na = 0;
+<a name="line3051">3051: </a>        nc = 0;
+<a name="line3052">3052: </a>        <font color="#000000">while</font>(ap = fuword(u.u_arg[1])) {
+<a name="line3053">3053: </a>                na++;
+<a name="line3054">3054: </a>                <font color="#000000">if</font>(ap == -1)
+<a name="line3055">3055: </a>                        <font color="#000000">goto</font> bad;
+<a name="line3056">3056: </a>                u.u_arg[1] =+ 2;
+<a name="line3057">3057: </a>                <font color="#000000">for</font>(;;) {
+<a name="line3058">3058: </a>                        c = fubyte(ap++);
+<a name="line3059">3059: </a>                        <font color="#000000">if</font>(c == -1)
+<a name="line3060">3060: </a>                                <font color="#000000">goto</font> bad;
+<a name="line3061">3061: </a>                        *cp++ = c;
+<a name="line3062">3062: </a>                        nc++;
+<a name="line3063">3063: </a>                        <font color="#000000">if</font>(nc &gt; 510) {
+<a name="line3064">3064: </a>                                u.u_error = E2BIG;
+<a name="line3065">3065: </a>                                <font color="#000000">goto</font> bad;
+<a name="line3066">3066: </a>                        }
+<a name="line3067">3067: </a>                        <font color="#000000">if</font>(c == 0)
+<a name="line3068">3068: </a>                                <font color="#000000">break</font>;
+<a name="line3069">3069: </a>                }
+<a name="line3070">3070: </a>        }
+<a name="line3071">3071: </a>        <font color="#000000">if</font>((nc&amp;1) != 0) {
+<a name="line3072">3072: </a>                *cp++ = 0;
+<a name="line3073">3073: </a>                nc++;
+<a name="line3074">3074: </a>        }
+<a name="line3075">3075: </a>
+<a name="line3076">3076: </a>        <font color="#800000">/* read in first 8 bytes</font>
+<a name="line3077">3077: </a><font color="#800000">         * of file for segment</font>
+<a name="line3078">3078: </a><font color="#800000">         * sizes:</font>
+<a name="line3079">3079: </a><font color="#800000">         * w0 = 407/410/411 (410 implies RO text) (411 implies sep ID)</font>
+<a name="line3080">3080: </a><font color="#800000">         * w1 = text size</font>
+<a name="line3081">3081: </a><font color="#800000">         * w2 = data size</font>
+<a name="line3082">3082: </a><font color="#800000">         * w3 = bss size</font>
+<a name="line3083">3083: </a><font color="#800000">         */</font>
+<a name="line3084">3084: </a>
+<a name="line3085">3085: </a>        u.u_base = &amp;u.u_arg[0];
+<a name="line3086">3086: </a>        u.u_count = 8;
+<a name="line3087">3087: </a>        u.u_offset[1] = 0;
+<a name="line3088">3088: </a>        u.u_offset[0] = 0;
+<a name="line3089">3089: </a>        u.u_segflg = 1;
+<a name="line3090">3090: </a>        readi(ip);
+<a name="line3091">3091: </a>        u.u_segflg = 0;
+<a name="line3092">3092: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line3093">3093: </a>                <font color="#000000">goto</font> bad;
+<a name="line3094">3094: </a>        sep = 0;
+<a name="line3095">3095: </a>        <font color="#000000">if</font>(u.u_arg[0] == 0407) {
+<a name="line3096">3096: </a>                u.u_arg[2] =+ u.u_arg[1];
+<a name="line3097">3097: </a>                u.u_arg[1] = 0;
+<a name="line3098">3098: </a>        } <font color="#000000">else</font>
+<a name="line3099">3099: </a>        <font color="#000000">if</font>(u.u_arg[0] == 0411)
+<a name="line3100">3100: </a>                sep++; <font color="#000000">else</font>
+<a name="line3101">3101: </a>        <font color="#000000">if</font>(u.u_arg[0] != 0410) {
+<a name="line3102">3102: </a>                u.u_error = ENOEXEC;
+<a name="line3103">3103: </a>                <font color="#000000">goto</font> bad;
+<a name="line3104">3104: </a>        }
+<a name="line3105">3105: </a>        <font color="#000000">if</font>(u.u_arg[1]!=0 &amp;&amp; (ip-&gt;i_flag&amp;ITEXT)==0 &amp;&amp; ip-&gt;i_count!=1) {
+<a name="line3106">3106: </a>                u.u_error = ETXTBSY;
+<a name="line3107">3107: </a>                <font color="#000000">goto</font> bad;
+<a name="line3108">3108: </a>        }
+<a name="line3109">3109: </a>
+<a name="line3110">3110: </a>        <font color="#800000">/*</font>
+<a name="line3111">3111: </a><font color="#800000">         * find text and data sizes</font>
+<a name="line3112">3112: </a><font color="#800000">         * try them out for possible</font>
+<a name="line3113">3113: </a><font color="#800000">         * exceed of max sizes</font>
+<a name="line3114">3114: </a><font color="#800000">         */</font>
+<a name="line3115">3115: </a>
+<a name="line3116">3116: </a>        ts = ((u.u_arg[1]+63)&gt;&gt;6) &amp; 01777;
+<a name="line3117">3117: </a>        ds = ((u.u_arg[2]+u.u_arg[3]+63)&gt;&gt;6) &amp; 01777;
+<a name="line3118">3118: </a>        <font color="#000000">if</font>(estabur(ts, ds, SSIZE, sep))
+<a name="line3119">3119: </a>                <font color="#000000">goto</font> bad;
+<a name="line3120">3120: </a>
+<a name="line3121">3121: </a>        <font color="#800000">/*</font>
+<a name="line3122">3122: </a><font color="#800000">         * allocate and clear core</font>
+<a name="line3123">3123: </a><font color="#800000">         * at this point, committed</font>
+<a name="line3124">3124: </a><font color="#800000">         * to the new image</font>
+<a name="line3125">3125: </a><font color="#800000">         */</font>
+<a name="line3126">3126: </a>
+<a name="line3127">3127: </a>        u.u_prof[3] = 0;
+<a name="line3128">3128: </a>        xfree();
+<a name="line3129">3129: </a>        expand(USIZE);
+<a name="line3130">3130: </a>        xalloc(ip);
+<a name="line3131">3131: </a>        c = USIZE+ds+SSIZE;
+<a name="line3132">3132: </a>        expand(c);
+<a name="line3133">3133: </a>        <font color="#000000">while</font>(--c &gt;= USIZE)
+<a name="line3134">3134: </a>                clearseg(u.u_procp-&gt;p_addr+c);
+<a name="line3135">3135: </a>
+<a name="line3136">3136: </a>        <font color="#800000">/* read in data segment */</font>
+<a name="line3137">3137: </a>
+<a name="line3138">3138: </a>        estabur(0, ds, 0, 0);
+<a name="line3139">3139: </a>        u.u_base = 0;
+<a name="line3140">3140: </a>        u.u_offset[1] = 020+u.u_arg[1];
+<a name="line3141">3141: </a>        u.u_count = u.u_arg[2];
+<a name="line3142">3142: </a>        readi(ip);
+<a name="line3143">3143: </a>
+<a name="line3144">3144: </a>        <font color="#800000">/*</font>
+<a name="line3145">3145: </a><font color="#800000">         * initialize stack segment</font>
+<a name="line3146">3146: </a><font color="#800000">         */</font>
+<a name="line3147">3147: </a>
+<a name="line3148">3148: </a>        u.u_tsize = ts;
+<a name="line3149">3149: </a>        u.u_dsize = ds;
+<a name="line3150">3150: </a>        u.u_ssize = SSIZE;
+<a name="line3151">3151: </a>        u.u_sep = sep;
+<a name="line3152">3152: </a>        estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep);
+<a name="line3153">3153: </a>        cp = bp-&gt;b_addr;
+<a name="line3154">3154: </a>        ap = -nc - na*2 - 4;
+<a name="line3155">3155: </a>        u.u_ar0[R6] = ap;
+<a name="line3156">3156: </a>        suword(ap, na);
+<a name="line3157">3157: </a>        c = -nc;
+<a name="line3158">3158: </a>        <font color="#000000">while</font>(na--) {
+<a name="line3159">3159: </a>                suword(ap=+2, c);
+<a name="line3160">3160: </a>                <font color="#000000">do</font>
+<a name="line3161">3161: </a>                        subyte(c++, *cp);
+<a name="line3162">3162: </a>                <font color="#000000">while</font>(*cp++);
+<a name="line3163">3163: </a>        }
+<a name="line3164">3164: </a>        suword(ap+2, -1);
+<a name="line3165">3165: </a>
+<a name="line3166">3166: </a>        <font color="#800000">/*</font>
+<a name="line3167">3167: </a><font color="#800000">         * set SUID/SGID protections, if no tracing</font>
+<a name="line3168">3168: </a><font color="#800000">         */</font>
+<a name="line3169">3169: </a>
+<a name="line3170">3170: </a>        <font color="#000000">if</font> ((u.u_procp-&gt;p_flag&amp;STRC)==0) {
+<a name="line3171">3171: </a>                <font color="#000000">if</font>(ip-&gt;i_mode&amp;ISUID)
+<a name="line3172">3172: </a>                        <font color="#000000">if</font>(u.u_uid != 0) {
+<a name="line3173">3173: </a>                                u.u_uid = ip-&gt;i_uid;
+<a name="line3174">3174: </a>                                u.u_procp-&gt;p_uid = ip-&gt;i_uid;
+<a name="line3175">3175: </a>                        }
+<a name="line3176">3176: </a>                <font color="#000000">if</font>(ip-&gt;i_mode&amp;ISGID)
+<a name="line3177">3177: </a>                        u.u_gid = ip-&gt;i_gid;
+<a name="line3178">3178: </a>        }
+<a name="line3179">3179: </a>
+<a name="line3180">3180: </a>        <font color="#800000">/* clear sigs, regs and return */</font>
+<a name="line3181">3181: </a>
+<a name="line3182">3182: </a>        c = ip;
+<a name="line3183">3183: </a>        <font color="#000000">for</font>(ip = &amp;u.u_signal[0]; ip &lt; &amp;u.u_signal[NSIG]; ip++)
+<a name="line3184">3184: </a>                <font color="#000000">if</font>((*ip &amp; 1) == 0)
+<a name="line3185">3185: </a>                        *ip = 0;
+<a name="line3186">3186: </a>        <font color="#000000">for</font>(cp = &amp;regloc[0]; cp &lt; &amp;regloc[6];)
+<a name="line3187">3187: </a>                u.u_ar0[*cp++] = 0;
+<a name="line3188">3188: </a>        u.u_ar0[R7] = 0;
+<a name="line3189">3189: </a>        <font color="#000000">for</font>(ip = &amp;u.u_fsav[0]; ip &lt; &amp;u.u_fsav[25];)
+<a name="line3190">3190: </a>                *ip++ = 0;
+<a name="line3191">3191: </a>        ip = c;
+<a name="line3192">3192: </a>
+<a name="line3193">3193: </a><font color="#000000">bad:</font>
+<a name="line3194">3194: </a>        iput(ip);
+<a name="line3195">3195: </a>        brelse(bp);
+<a name="line3196">3196: </a>        <font color="#000000">if</font>(execnt &gt;= NEXEC)
+<a name="line3197">3197: </a>                wakeup(&amp;execnt);
+<a name="line3198">3198: </a>        execnt--;
+<a name="line3199">3199: </a>}
+<a name="line3200">3200: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3201">3201: </a>
+<a name="line3202">3202: </a><font color="#800000">/* exit system call:</font>
+<a name="line3203">3203: </a><font color="#800000"> * pass back caller's r0</font>
+<a name="line3204">3204: </a><font color="#800000"> */</font>
+<a name="line3205">3205: </a><font color="#000000"><a name="exit"></a>rexit()</font>
+<a name="line3206">3206: </a>{
+<a name="line3207">3207: </a>
+<a name="line3208">3208: </a>        u.u_arg[0] = u.u_ar0[R0] &lt;&lt; 8;
+<a name="line3209">3209: </a>        exit();
+<a name="line3210">3210: </a>}
+<a name="line3211">3211: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3212">3212: </a>
+<a name="line3213">3213: </a><font color="#800000">/* Release resources.</font>
+<a name="line3214">3214: </a><font color="#800000"> * Save u. area for parent to look at.</font>
+<a name="line3215">3215: </a><font color="#800000"> * Enter zombie state.</font>
+<a name="line3216">3216: </a><font color="#800000"> * Wake up parent and init processes,</font>
+<a name="line3217">3217: </a><font color="#800000"> * and dispose of children.</font>
+<a name="line3218">3218: </a><font color="#800000"> */</font>
+<a name="line3219">3219: </a><font color="#000000"><a name="xit"></a>exit()</font>
+<a name="line3220">3220: </a>{
+<a name="line3221">3221: </a>        register int *q, a;
+<a name="line3222">3222: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line3223">3223: </a>
+<a name="line3224">3224: </a>        u.u_procp-&gt;p_flag =&amp; ~STRC;
+<a name="line3225">3225: </a>        <font color="#000000">for</font>(q = &amp;u.u_signal[0]; q &lt; &amp;u.u_signal[NSIG];)
+<a name="line3226">3226: </a>                *q++ = 1;
+<a name="line3227">3227: </a>        <font color="#000000">for</font>(q = &amp;u.u_ofile[0]; q &lt; &amp;u.u_ofile[NOFILE]; q++)
+<a name="line3228">3228: </a>                <font color="#000000">if</font>(a = *q) {
+<a name="line3229">3229: </a>                        *q = NULL;
+<a name="line3230">3230: </a>                        closef(a);
+<a name="line3231">3231: </a>                }
+<a name="line3232">3232: </a>        iput(u.u_cdir);
+<a name="line3233">3233: </a>        xfree();
+<a name="line3234">3234: </a>        a = malloc(swapmap, 1);
+<a name="line3235">3235: </a>        <font color="#000000">if</font>(a == NULL)
+<a name="line3236">3236: </a>                panic(<font color="#000000">"out of swap"</font>);
+<a name="line3237">3237: </a>        p = getblk(swapdev, a);
+<a name="line3238">3238: </a>        bcopy(&amp;u, p-&gt;b_addr, 256);
+<a name="line3239">3239: </a>        bwrite(p);
+<a name="line3240">3240: </a>        q = u.u_procp;
+<a name="line3241">3241: </a>        mfree(coremap, q-&gt;p_size, q-&gt;p_addr);
+<a name="line3242">3242: </a>        q-&gt;p_addr = a;
+<a name="line3243">3243: </a>        q-&gt;p_stat = SZOMB;
+<a name="line3244">3244: </a>
+<a name="line3245">3245: </a><font color="#000000">loop:</font>
+<a name="line3246">3246: </a>        <font color="#000000">for</font>(p = &amp;proc[0]; p &lt; &amp;proc[NPROC]; p++)
+<a name="line3247">3247: </a>        <font color="#000000">if</font>(q-&gt;p_ppid == p-&gt;p_pid) {
+<a name="line3248">3248: </a>                wakeup(&amp;proc[1]);
+<a name="line3249">3249: </a>                wakeup(p);
+<a name="line3250">3250: </a>                <font color="#000000">for</font>(p = &amp;proc[0]; p &lt; &amp;proc[NPROC]; p++)
+<a name="line3251">3251: </a>                <font color="#000000">if</font>(q-&gt;p_pid == p-&gt;p_ppid) {
+<a name="line3252">3252: </a>                        p-&gt;p_ppid  = 1;
+<a name="line3253">3253: </a>                        <font color="#000000">if</font> (p-&gt;p_stat == SSTOP)
+<a name="line3254">3254: </a>                                setrun(p);
+<a name="line3255">3255: </a>                }
+<a name="line3256">3256: </a>                swtch();
+<a name="line3257">3257: </a>                <font color="#800000">/* no return */</font>
+<a name="line3258">3258: </a>        }
+<a name="line3259">3259: </a>        q-&gt;p_ppid = 1;
+<a name="line3260">3260: </a>        <font color="#000000">goto</font> loop;
+<a name="line3261">3261: </a>}
+<a name="line3262">3262: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3263">3263: </a>
+<a name="line3264">3264: </a><font color="#800000">/* Wait system call.</font>
+<a name="line3265">3265: </a><font color="#800000"> * Search for a terminated (zombie) child,</font>
+<a name="line3266">3266: </a><font color="#800000"> * finally lay it to rest, and collect its status.</font>
+<a name="line3267">3267: </a><font color="#800000"> * Look also for stopped (traced) children,</font>
+<a name="line3268">3268: </a><font color="#800000"> * and pass back status from them.</font>
+<a name="line3269">3269: </a><font color="#800000"> */</font>
+<a name="line3270">3270: </a><font color="#000000"><a name="ait"></a>wait()</font>
+<a name="line3271">3271: </a>{
+<a name="line3272">3272: </a>        register f, *bp;
+<a name="line3273">3273: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line3274">3274: </a>
+<a name="line3275">3275: </a>        f = 0;
+<a name="line3276">3276: </a><font color="#000000">loop:</font>
+<a name="line3277">3277: </a>        <font color="#000000">for</font>(p = &amp;proc[0]; p &lt; &amp;proc[NPROC]; p++)
+<a name="line3278">3278: </a>        <font color="#000000">if</font>(p-&gt;p_ppid == u.u_procp-&gt;p_pid) {
+<a name="line3279">3279: </a>                f++;
+<a name="line3280">3280: </a>                <font color="#000000">if</font>(p-&gt;p_stat == SZOMB) {
+<a name="line3281">3281: </a>                        u.u_ar0[R0] = p-&gt;p_pid;
+<a name="line3282">3282: </a>                        bp = bread(swapdev, f=p-&gt;p_addr);
+<a name="line3283">3283: </a>                        mfree(swapmap, 1, f);
+<a name="line3284">3284: </a>                        p-&gt;p_stat = NULL;
+<a name="line3285">3285: </a>                        p-&gt;p_pid = 0;
+<a name="line3286">3286: </a>                        p-&gt;p_ppid = 0;
+<a name="line3287">3287: </a>                        p-&gt;p_sig = 0;
+<a name="line3288">3288: </a>                        p-&gt;p_ttyp = 0;
+<a name="line3289">3289: </a>                        p-&gt;p_flag = 0;
+<a name="line3290">3290: </a>                        p = bp-&gt;b_addr;
+<a name="line3291">3291: </a>                        u.u_cstime[0] =+ p-&gt;u_cstime[0];
+<a name="line3292">3292: </a>                        dpadd(u.u_cstime, p-&gt;u_cstime[1]);
+<a name="line3293">3293: </a>                        dpadd(u.u_cstime, p-&gt;u_stime);
+<a name="line3294">3294: </a>                        u.u_cutime[0] =+ p-&gt;u_cutime[0];
+<a name="line3295">3295: </a>                        dpadd(u.u_cutime, p-&gt;u_cutime[1]);
+<a name="line3296">3296: </a>                        dpadd(u.u_cutime, p-&gt;u_utime);
+<a name="line3297">3297: </a>                        u.u_ar0[R1] = p-&gt;u_arg[0];
+<a name="line3298">3298: </a>                        brelse(bp);
+<a name="line3299">3299: </a>                        <font color="#000000">return</font>;
+<a name="line3300">3300: </a>                }
+<a name="line3301">3301: </a>                <font color="#000000">if</font>(p-&gt;p_stat == SSTOP) {
+<a name="line3302">3302: </a>                        <font color="#000000">if</font>((p-&gt;p_flag&amp;SWTED) == 0) {
+<a name="line3303">3303: </a>                                p-&gt;p_flag =| SWTED;
+<a name="line3304">3304: </a>                                u.u_ar0[R0] = p-&gt;p_pid;
+<a name="line3305">3305: </a>                                u.u_ar0[R1] = (p-&gt;p_sig&lt;&lt;8) | 0177;
+<a name="line3306">3306: </a>                                <font color="#000000">return</font>;
+<a name="line3307">3307: </a>                        }
+<a name="line3308">3308: </a>                        p-&gt;p_flag =&amp; ~(STRC|SWTED);
+<a name="line3309">3309: </a>                        setrun(p);
+<a name="line3310">3310: </a>                }
+<a name="line3311">3311: </a>        }
+<a name="line3312">3312: </a>        <font color="#000000">if</font>(f) {
+<a name="line3313">3313: </a>                sleep(u.u_procp, PWAIT);
+<a name="line3314">3314: </a>                <font color="#000000">goto</font> loop;
+<a name="line3315">3315: </a>        }
+<a name="line3316">3316: </a>        u.u_error = ECHILD;
+<a name="line3317">3317: </a>}
+<a name="line3318">3318: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3319">3319: </a>
+<a name="line3320">3320: </a><font color="#800000">/* fork system call.</font>
+<a name="line3321">3321: </a><font color="#800000"> */</font>
+<a name="line3322">3322: </a><font color="#000000"><a name="ork"></a>fork()</font>
+<a name="line3323">3323: </a>{
+<a name="line3324">3324: </a>        register <font color="#000000">struct proc</font> *p1, *p2;
+<a name="line3325">3325: </a>
+<a name="line3326">3326: </a>        p1 = u.u_procp;
+<a name="line3327">3327: </a>        <font color="#000000">for</font>(p2 = &amp;proc[0]; p2 &lt; &amp;proc[NPROC]; p2++)
+<a name="line3328">3328: </a>                <font color="#000000">if</font>(p2-&gt;p_stat == NULL)
+<a name="line3329">3329: </a>                        <font color="#000000">goto</font> found;
+<a name="line3330">3330: </a>        u.u_error = EAGAIN;
+<a name="line3331">3331: </a>        <font color="#000000">goto</font> out;
+<a name="line3332">3332: </a>
+<a name="line3333">3333: </a><font color="#000000">found:</font>
+<a name="line3334">3334: </a>        <font color="#000000">if</font>(newproc()) {
+<a name="line3335">3335: </a>                u.u_ar0[R0] = p1-&gt;p_pid;
+<a name="line3336">3336: </a>                u.u_cstime[0] = 0;
+<a name="line3337">3337: </a>                u.u_cstime[1] = 0;
+<a name="line3338">3338: </a>                u.u_stime = 0;
+<a name="line3339">3339: </a>                u.u_cutime[0] = 0;
+<a name="line3340">3340: </a>                u.u_cutime[1] = 0;
+<a name="line3341">3341: </a>                u.u_utime = 0;
+<a name="line3342">3342: </a>                <font color="#000000">return</font>;
+<a name="line3343">3343: </a>        }
+<a name="line3344">3344: </a>        u.u_ar0[R0] = p2-&gt;p_pid;
+<a name="line3345">3345: </a>
+<a name="line3346">3346: </a><font color="#000000">out:</font>
+<a name="line3347">3347: </a>        u.u_ar0[R7] =+ 2;
+<a name="line3348">3348: </a>}
+<a name="line3349">3349: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3350">3350: </a>
+<a name="line3351">3351: </a><font color="#800000">/* break system call.</font>
+<a name="line3352">3352: </a><font color="#800000"> *  -- bad planning: "break" is a dirty word in C.</font>
+<a name="line3353">3353: </a><font color="#800000"> */</font>
+<a name="line3354">3354: </a><font color="#000000"><a name="break"></a>sbreak()</font>
+<a name="line3355">3355: </a>{
+<a name="line3356">3356: </a>        register a, n, d;
+<a name="line3357">3357: </a>        int i;
+<a name="line3358">3358: </a>
+<a name="line3359">3359: </a>        <font color="#800000">/* set n to new data size</font>
+<a name="line3360">3360: </a><font color="#800000">         * set d to new-old</font>
+<a name="line3361">3361: </a><font color="#800000">         * set n to new total size</font>
+<a name="line3362">3362: </a><font color="#800000">         */</font>
+<a name="line3363">3363: </a>
+<a name="line3364">3364: </a>        n = (((u.u_arg[0]+63)&gt;&gt;6) &amp; 01777);
+<a name="line3365">3365: </a>        <font color="#000000">if</font>(!u.u_sep)
+<a name="line3366">3366: </a>                n =- nseg(u.u_tsize) * 128;
+<a name="line3367">3367: </a>        <font color="#000000">if</font>(n &lt; 0)
+<a name="line3368">3368: </a>                n = 0;
+<a name="line3369">3369: </a>        d = n - u.u_dsize;
+<a name="line3370">3370: </a>        n =+ USIZE+u.u_ssize;
+<a name="line3371">3371: </a>        <font color="#000000">if</font>(estabur(u.u_tsize, u.u_dsize+d, u.u_ssize, u.u_sep))
+<a name="line3372">3372: </a>                <font color="#000000">return</font>;
+<a name="line3373">3373: </a>        u.u_dsize =+ d;
+<a name="line3374">3374: </a>        <font color="#000000">if</font>(d &gt; 0)
+<a name="line3375">3375: </a>                <font color="#000000">goto</font> bigger;
+<a name="line3376">3376: </a>        a = u.u_procp-&gt;p_addr + n - u.u_ssize;
+<a name="line3377">3377: </a>        i = n;
+<a name="line3378">3378: </a>        n = u.u_ssize;
+<a name="line3379">3379: </a>        <font color="#000000">while</font>(n--) {
+<a name="line3380">3380: </a>                copyseg(a-d, a);
+<a name="line3381">3381: </a>                a++;
+<a name="line3382">3382: </a>        }
+<a name="line3383">3383: </a>        expand(i);
+<a name="line3384">3384: </a>        <font color="#000000">return</font>;
+<a name="line3385">3385: </a>
+<a name="line3386">3386: </a><font color="#000000">bigger:</font>
+<a name="line3387">3387: </a>        expand(n);
+<a name="line3388">3388: </a>        a = u.u_procp-&gt;p_addr + n;
+<a name="line3389">3389: </a>        n = u.u_ssize;
+<a name="line3390">3390: </a>        <font color="#000000">while</font>(n--) {
+<a name="line3391">3391: </a>                a--;
+<a name="line3392">3392: </a>                copyseg(a-d, a);
+<a name="line3393">3393: </a>        }
+<a name="line3394">3394: </a>        <font color="#000000">while</font>(d--)
+<a name="line3395">3395: </a>                clearseg(--a);
+<a name="line3396">3396: </a>}
+<a name="line3397">3397: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

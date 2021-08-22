@@ -1,0 +1,186 @@
+
+<html>
+<head>
+<title>pc.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line8600">8600: </a><font color="#000000">#</font>
+<a name="line8601">8601: </a><font color="#800000">/* PC-11 Paper tape reader/punch driver */</font>
+<a name="line8602">8602: </a>
+<a name="line8603">8603: </a><font color="#000000">#include "../param.h"</font>
+<a name="line8604">8604: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line8605">8605: </a><font color="#000000">#include "../user.h"</font>
+<a name="line8606">8606: </a>
+<a name="line8607">8607: </a><font color="#000000">#define PCADDR  0177550</font>
+<a name="line8608">8608: </a>
+<a name="line8609">8609: </a><font color="#000000">#define CLOSED  0</font>
+<a name="line8610">8610: </a><font color="#000000">#define WAITING 1</font>
+<a name="line8611">8611: </a><font color="#000000">#define READING 2</font>
+<a name="line8612">8612: </a><font color="#000000">#define EOF     3</font>
+<a name="line8613">8613: </a>
+<a name="line8614">8614: </a><font color="#000000">#define RDRENB  01</font>
+<a name="line8615">8615: </a><font color="#000000">#define IENABLE 0100</font>
+<a name="line8616">8616: </a><font color="#000000">#define DONE    0200</font>
+<a name="line8617">8617: </a><font color="#000000">#define BUSY    04000</font>
+<a name="line8618">8618: </a><font color="#000000">#define ERROR   0100000</font>
+<a name="line8619">8619: </a>
+<a name="line8620">8620: </a><font color="#000000">#define PCIPRI  30</font>
+<a name="line8621">8621: </a><font color="#000000">#define PCOPRI  40</font>
+<a name="line8622">8622: </a><font color="#000000">#define PCOLWAT 50</font>
+<a name="line8623">8623: </a><font color="#000000">#define PCOHWAT 100</font>
+<a name="line8624">8624: </a><font color="#000000">#define PCIHWAT 250</font>
+<a name="line8625">8625: </a>
+<a name="line8626">8626: </a><font color="#000000">struct</font> {
+<a name="line8627">8627: </a>        int pcrcsr;
+<a name="line8628">8628: </a>        int pcrbuf;
+<a name="line8629">8629: </a>        int pcpcsr;
+<a name="line8630">8630: </a>        int pcpbuf;
+<a name="line8631">8631: </a>};
+<a name="line8632">8632: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8633">8633: </a>
+<a name="line8634">8634: </a><font color="#000000"><a name="clist"></a>struct clist </font>{
+<a name="line8635">8635: </a>        int     cc;
+<a name="line8636">8636: </a>        int     cf;
+<a name="line8637">8637: </a>        int     cl;
+<a name="line8638">8638: </a>};
+<a name="line8639">8639: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8640">8640: </a>
+<a name="line8641">8641: </a><font color="#000000"><a name="pc11"></a>struct pc11 </font>{
+<a name="line8642">8642: </a>        int     pcstate;
+<a name="line8643">8643: </a>        <font color="#000000">struct</font>  clist pcin;
+<a name="line8644">8644: </a>        <font color="#000000">struct</font>  clist pcout;
+<a name="line8645">8645: </a>} pc11;
+<a name="line8646">8646: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8647">8647: </a>
+<a name="line8648">8648: </a><font color="#000000"><a name="copen"></a>pcopen(dev, flag)</font>
+<a name="line8649">8649: </a>{
+<a name="line8650">8650: </a>        extern lbolt;
+<a name="line8651">8651: </a>
+<a name="line8652">8652: </a>        <font color="#000000">if</font> (flag==0) {
+<a name="line8653">8653: </a>                <font color="#000000">if</font> (pc11.pcstate!=CLOSED) {
+<a name="line8654">8654: </a>                        u.u_error = ENXIO;
+<a name="line8655">8655: </a>                        <font color="#000000">return</font>;
+<a name="line8656">8656: </a>                }
+<a name="line8657">8657: </a>                pc11.pcstate = WAITING;
+<a name="line8658">8658: </a>                <font color="#000000">while</font>(pc11.pcstate==WAITING) {
+<a name="line8659">8659: </a>                        PCADDR-&gt;pcrcsr = IENABLE|RDRENB;
+<a name="line8660">8660: </a>                        sleep(&amp;lbolt, PCIPRI);
+<a name="line8661">8661: </a>                }
+<a name="line8662">8662: </a>        } <font color="#000000">else</font> {
+<a name="line8663">8663: </a>                PCADDR-&gt;pcpcsr =| IENABLE;
+<a name="line8664">8664: </a>                pcleader();
+<a name="line8665">8665: </a>        }
+<a name="line8666">8666: </a>}
+<a name="line8667">8667: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8668">8668: </a>
+<a name="line8669">8669: </a><font color="#000000"><a name="cclose"></a>pcclose(dev, flag)</font>
+<a name="line8670">8670: </a>{
+<a name="line8671">8671: </a>        <font color="#000000">if</font> (flag==0) {
+<a name="line8672">8672: </a>                spl4();
+<a name="line8673">8673: </a>                <font color="#000000">while</font> (getc(&amp;pc11.pcin) &gt;= 0);
+<a name="line8674">8674: </a>                PCADDR-&gt;pcrcsr = 0;
+<a name="line8675">8675: </a>                pc11.pcstate = CLOSED;
+<a name="line8676">8676: </a>                spl0();
+<a name="line8677">8677: </a>        } <font color="#000000">else</font>
+<a name="line8678">8678: </a>                pcleader();
+<a name="line8679">8679: </a>}
+<a name="line8680">8680: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8681">8681: </a>
+<a name="line8682">8682: </a><font color="#000000"><a name="cread"></a>pcread()</font>
+<a name="line8683">8683: </a>{
+<a name="line8684">8684: </a>        register int c;
+<a name="line8685">8685: </a>
+<a name="line8686">8686: </a>        spl4();
+<a name="line8687">8687: </a>        <font color="#000000">do</font> {
+<a name="line8688">8688: </a>                <font color="#000000">while</font> ((c = getc(&amp;pc11.pcin)) &lt; 0) {
+<a name="line8689">8689: </a>                        <font color="#000000">if</font> (pc11.pcstate==EOF)
+<a name="line8690">8690: </a>                                <font color="#000000">goto</font> out;
+<a name="line8691">8691: </a>                        <font color="#000000">if</font> ((PCADDR-&gt;pcrcsr&amp;(ERROR|BUSY|DONE))==0)
+<a name="line8692">8692: </a>                                PCADDR-&gt;pcrcsr =| IENABLE|RDRENB;
+<a name="line8693">8693: </a>                        sleep(&amp;pc11.pcin, PCIPRI);
+<a name="line8694">8694: </a>                }
+<a name="line8695">8695: </a>        } <font color="#000000">while</font> (passc(c)&gt;=0);
+<a name="line8696">8696: </a><font color="#000000">out:</font>
+<a name="line8697">8697: </a>        spl0();
+<a name="line8698">8698: </a>}
+<a name="line8699">8699: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8700">8700: </a>
+<a name="line8701">8701: </a><font color="#000000"><a name="cwrite"></a>pcwrite()</font>
+<a name="line8702">8702: </a>{
+<a name="line8703">8703: </a>        register int c;
+<a name="line8704">8704: </a>
+<a name="line8705">8705: </a>        <font color="#000000">while</font> ((c=cpass())&gt;=0)
+<a name="line8706">8706: </a>                pcoutput(c);
+<a name="line8707">8707: </a>}
+<a name="line8708">8708: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8709">8709: </a>
+<a name="line8710">8710: </a><font color="#000000"><a name="cstart"></a>pcstart()</font>
+<a name="line8711">8711: </a>{
+<a name="line8712">8712: </a>        register int c;
+<a name="line8713">8713: </a>
+<a name="line8714">8714: </a>        <font color="#000000">if</font> (PCADDR-&gt;pcpcsr&amp;DONE &amp;&amp; (c = getc(&amp;pc11.pcout)) &gt;= 0)
+<a name="line8715">8715: </a>                PCADDR-&gt;pcpbuf = c;
+<a name="line8716">8716: </a>}
+<a name="line8717">8717: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8718">8718: </a>
+<a name="line8719">8719: </a><font color="#000000"><a name="crint"></a>pcrint()</font>
+<a name="line8720">8720: </a>{
+<a name="line8721">8721: </a>        <font color="#000000">if</font> (pc11.pcstate==WAITING) {
+<a name="line8722">8722: </a>                <font color="#000000">if</font> (PCADDR-&gt;pcrcsr&amp;ERROR)
+<a name="line8723">8723: </a>                        <font color="#000000">return</font>;
+<a name="line8724">8724: </a>                pc11.pcstate = READING;
+<a name="line8725">8725: </a>        }
+<a name="line8726">8726: </a>        <font color="#000000">if</font> (pc11.pcstate==READING) {
+<a name="line8727">8727: </a>                <font color="#000000">if</font> (PCADDR-&gt;pcrcsr&amp;ERROR)
+<a name="line8728">8728: </a>                        pc11.pcstate = EOF;
+<a name="line8729">8729: </a>                <font color="#000000">else</font> {
+<a name="line8730">8730: </a>                        putc(PCADDR-&gt;pcrbuf, &amp;pc11.pcin);
+<a name="line8731">8731: </a>                        <font color="#000000">if</font> (pc11.pcin.cc &lt; PCIHWAT)
+<a name="line8732">8732: </a>                                PCADDR-&gt;pcrcsr =| IENABLE|RDRENB;
+<a name="line8733">8733: </a>                }
+<a name="line8734">8734: </a>                wakeup(&amp;pc11.pcin);
+<a name="line8735">8735: </a>        }
+<a name="line8736">8736: </a>}
+<a name="line8737">8737: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8738">8738: </a>
+<a name="line8739">8739: </a><font color="#000000"><a name="cpint"></a>pcpint()</font>
+<a name="line8740">8740: </a>{
+<a name="line8741">8741: </a>
+<a name="line8742">8742: </a>        pcstart();
+<a name="line8743">8743: </a>        <font color="#000000">if</font> (pc11.pcout.cc &lt;= PCOLWAT)
+<a name="line8744">8744: </a>                wakeup(&amp;pc11.pcout);
+<a name="line8745">8745: </a>}
+<a name="line8746">8746: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8747">8747: </a>
+<a name="line8748">8748: </a><font color="#000000"><a name="coutput"></a>pcoutput(c)</font>
+<a name="line8749">8749: </a>{
+<a name="line8750">8750: </a>        <font color="#000000">if</font> (PCADDR-&gt;pcpcsr&amp;ERROR) {
+<a name="line8751">8751: </a>                u.u_error = EIO;
+<a name="line8752">8752: </a>                <font color="#000000">return</font>;
+<a name="line8753">8753: </a>        }
+<a name="line8754">8754: </a>        <font color="#000000">if</font> (pc11.pcout.cc &gt;= PCOHWAT)
+<a name="line8755">8755: </a>                sleep(&amp;pc11.pcout, PCOPRI);
+<a name="line8756">8756: </a>        putc(c, &amp;pc11.pcout);
+<a name="line8757">8757: </a>        spl4();
+<a name="line8758">8758: </a>        pcstart();
+<a name="line8759">8759: </a>        spl0();
+<a name="line8760">8760: </a>}
+<a name="line8761">8761: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8762">8762: </a>
+<a name="line8763">8763: </a><font color="#000000"><a name="cleader"></a>pcleader()</font>
+<a name="line8764">8764: </a>{
+<a name="line8765">8765: </a>        register int i;
+<a name="line8766">8766: </a>
+<a name="line8767">8767: </a>        i = 100;
+<a name="line8768">8768: </a>        <font color="#000000">do</font>
+<a name="line8769">8769: </a>                pcoutput(0);
+<a name="line8770">8770: </a>        <font color="#000000">while</font> (--i);
+<a name="line8771">8771: </a>}
+<a name="line8772">8772: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

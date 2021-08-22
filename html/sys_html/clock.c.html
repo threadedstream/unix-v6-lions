@@ -1,0 +1,188 @@
+
+<html>
+<head>
+<title>clock.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line3700">3700: </a><font color="#000000">#</font>
+<a name="line3701">3701: </a><font color="#000000">#include "../param.h"</font>
+<a name="line3702">3702: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line3703">3703: </a><font color="#000000">#include "../user.h"</font>
+<a name="line3704">3704: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line3705">3705: </a>
+<a name="line3706">3706: </a><font color="#000000">#define UMODE   0170000</font>
+<a name="line3707">3707: </a><font color="#000000">#define SCHMAG  10</font>
+<a name="line3708">3708: </a>
+<a name="line3709">3709: </a><font color="#800000">/*</font>
+<a name="line3710">3710: </a><font color="#800000"> * clock is called straight from</font>
+<a name="line3711">3711: </a><font color="#800000"> * the real time clock interrupt.</font>
+<a name="line3712">3712: </a><font color="#800000"> *</font>
+<a name="line3713">3713: </a><font color="#800000"> * Functions:</font>
+<a name="line3714">3714: </a><font color="#800000"> *      reprime clock</font>
+<a name="line3715">3715: </a><font color="#800000"> *      copy *switches to display</font>
+<a name="line3716">3716: </a><font color="#800000"> *      implement callouts</font>
+<a name="line3717">3717: </a><font color="#800000"> *      maintain user/system times</font>
+<a name="line3718">3718: </a><font color="#800000"> *      maintain date</font>
+<a name="line3719">3719: </a><font color="#800000"> *      profile</font>
+<a name="line3720">3720: </a><font color="#800000"> *      tout wakeup (sys sleep)</font>
+<a name="line3721">3721: </a><font color="#800000"> *      lightning bolt wakeup (every 4 sec)</font>
+<a name="line3722">3722: </a><font color="#800000"> *      alarm clock signals</font>
+<a name="line3723">3723: </a><font color="#800000"> *      jab the scheduler</font>
+<a name="line3724">3724: </a><font color="#800000"> */</font>
+<a name="line3725">3725: </a><font color="#000000"><a name="lock"></a>clock(dev, sp, r1, nps, r0, pc, ps)</font>
+<a name="line3726">3726: </a>{
+<a name="line3727">3727: </a>        register <font color="#000000">struct callo</font> *p1, *p2;
+<a name="line3728">3728: </a>        register <font color="#000000">struct proc</font> *pp;
+<a name="line3729">3729: </a>
+<a name="line3730">3730: </a>        <font color="#800000">/*</font>
+<a name="line3731">3731: </a><font color="#800000">         * restart clock</font>
+<a name="line3732">3732: </a><font color="#800000">         */</font>
+<a name="line3733">3733: </a>
+<a name="line3734">3734: </a>        *lks = 0115;
+<a name="line3735">3735: </a>
+<a name="line3736">3736: </a>        <font color="#800000">/*</font>
+<a name="line3737">3737: </a><font color="#800000">         * display register</font>
+<a name="line3738">3738: </a><font color="#800000">         */</font>
+<a name="line3739">3739: </a>
+<a name="line3740">3740: </a>        display();
+<a name="line3741">3741: </a>
+<a name="line3742">3742: </a>        <font color="#800000">/*</font>
+<a name="line3743">3743: </a><font color="#800000">         * callouts</font>
+<a name="line3744">3744: </a><font color="#800000">         * if none, just return</font>
+<a name="line3745">3745: </a><font color="#800000">         * else update first non-zero time</font>
+<a name="line3746">3746: </a><font color="#800000">         */</font>
+<a name="line3747">3747: </a>
+<a name="line3748">3748: </a>        <font color="#000000">if</font>(callout[0].c_func == 0)
+<a name="line3749">3749: </a>                <font color="#000000">goto</font> out;
+<a name="line3750">3750: </a>        p2 = &amp;callout[0];
+<a name="line3751">3751: </a>        <font color="#000000">while</font>(p2-&gt;c_time&lt;=0 &amp;&amp; p2-&gt;c_func!=0)
+<a name="line3752">3752: </a>                p2++;
+<a name="line3753">3753: </a>        p2-&gt;c_time--;
+<a name="line3754">3754: </a>
+<a name="line3755">3755: </a>        <font color="#800000">/*</font>
+<a name="line3756">3756: </a><font color="#800000">         * if ps is high, just return</font>
+<a name="line3757">3757: </a><font color="#800000">         */</font>
+<a name="line3758">3758: </a>
+<a name="line3759">3759: </a>        <font color="#000000">if</font>((ps&amp;0340) != 0)
+<a name="line3760">3760: </a>                <font color="#000000">goto</font> out;
+<a name="line3761">3761: </a>
+<a name="line3762">3762: </a>        <font color="#800000">/*</font>
+<a name="line3763">3763: </a><font color="#800000">         * callout</font>
+<a name="line3764">3764: </a><font color="#800000">         */</font>
+<a name="line3765">3765: </a>
+<a name="line3766">3766: </a>        spl5();
+<a name="line3767">3767: </a>        <font color="#000000">if</font>(callout[0].c_time &lt;= 0) {
+<a name="line3768">3768: </a>                p1 = &amp;callout[0];
+<a name="line3769">3769: </a>                <font color="#000000">while</font>(p1-&gt;c_func != 0 &amp;&amp; p1-&gt;c_time &lt;= 0) {
+<a name="line3770">3770: </a>                        (*p1-&gt;c_func)(p1-&gt;c_arg);
+<a name="line3771">3771: </a>                        p1++;
+<a name="line3772">3772: </a>                }
+<a name="line3773">3773: </a>                p2 = &amp;callout[0];
+<a name="line3774">3774: </a>                <font color="#000000">while</font>(p2-&gt;c_func = p1-&gt;c_func) {
+<a name="line3775">3775: </a>                        p2-&gt;c_time = p1-&gt;c_time;
+<a name="line3776">3776: </a>                        p2-&gt;c_arg = p1-&gt;c_arg;
+<a name="line3777">3777: </a>                        p1++;
+<a name="line3778">3778: </a>                        p2++;
+<a name="line3779">3779: </a>                }
+<a name="line3780">3780: </a>        }
+<a name="line3781">3781: </a>
+<a name="line3782">3782: </a>        <font color="#800000">/*</font>
+<a name="line3783">3783: </a><font color="#800000">         * lightning bolt time-out</font>
+<a name="line3784">3784: </a><font color="#800000">         * and time of day</font>
+<a name="line3785">3785: </a><font color="#800000">         */</font>
+<a name="line3786">3786: </a>
+<a name="line3787">3787: </a><font color="#000000">out:</font>
+<a name="line3788">3788: </a>        <font color="#000000">if</font>((ps&amp;UMODE) == UMODE) {
+<a name="line3789">3789: </a>                u.u_utime++;
+<a name="line3790">3790: </a>                <font color="#000000">if</font>(u.u_prof[3])
+<a name="line3791">3791: </a>                        incupc(pc, u.u_prof);
+<a name="line3792">3792: </a>        } <font color="#000000">else</font>
+<a name="line3793">3793: </a>                u.u_stime++;
+<a name="line3794">3794: </a>        pp = u.u_procp;
+<a name="line3795">3795: </a>        <font color="#000000">if</font>(++pp-&gt;p_cpu == 0)
+<a name="line3796">3796: </a>                pp-&gt;p_cpu--;
+<a name="line3797">3797: </a>        <font color="#000000">if</font>(++lbolt &gt;= HZ) {
+<a name="line3798">3798: </a>                <font color="#000000">if</font>((ps&amp;0340) != 0)
+<a name="line3799">3799: </a>                        <font color="#000000">return</font>;
+<a name="line3800">3800: </a>                lbolt =- HZ;
+<a name="line3801">3801: </a>                <font color="#000000">if</font>(++time[1] == 0)
+<a name="line3802">3802: </a>                        ++time[0];
+<a name="line3803">3803: </a>                spl1();
+<a name="line3804">3804: </a>                <font color="#000000">if</font>(time[1]==tout[1] &amp;&amp; time[0]==tout[0])
+<a name="line3805">3805: </a>                        wakeup(tout);
+<a name="line3806">3806: </a>                <font color="#000000">if</font>((time[1]&amp;03) == 0) {
+<a name="line3807">3807: </a>                        runrun++;
+<a name="line3808">3808: </a>                        wakeup(&amp;lbolt);
+<a name="line3809">3809: </a>                }
+<a name="line3810">3810: </a>                <font color="#000000">for</font>(pp = &amp;proc[0]; pp &lt; &amp;proc[NPROC]; pp++)
+<a name="line3811">3811: </a>                <font color="#000000">if</font> (pp-&gt;p_stat) {
+<a name="line3812">3812: </a>                        <font color="#000000">if</font>(pp-&gt;p_time != 127)
+<a name="line3813">3813: </a>                                pp-&gt;p_time++;
+<a name="line3814">3814: </a>                        <font color="#000000">if</font>((pp-&gt;p_cpu &amp; 0377) &gt; SCHMAG)
+<a name="line3815">3815: </a>                                pp-&gt;p_cpu =- SCHMAG; <font color="#000000">else</font>
+<a name="line3816">3816: </a>                                pp-&gt;p_cpu = 0;
+<a name="line3817">3817: </a>                        <font color="#000000">if</font>(pp-&gt;p_pri &gt; PUSER)
+<a name="line3818">3818: </a>                                setpri(pp);
+<a name="line3819">3819: </a>                }
+<a name="line3820">3820: </a>                <font color="#000000">if</font>(runin!=0) {
+<a name="line3821">3821: </a>                        runin = 0;
+<a name="line3822">3822: </a>                        wakeup(&amp;runin);
+<a name="line3823">3823: </a>                }
+<a name="line3824">3824: </a>                <font color="#000000">if</font>((ps&amp;UMODE) == UMODE) {
+<a name="line3825">3825: </a>                        u.u_ar0 = &amp;r0;
+<a name="line3826">3826: </a>                        <font color="#000000">if</font>(issig())
+<a name="line3827">3827: </a>                                psig();
+<a name="line3828">3828: </a>                        setpri(u.u_procp);
+<a name="line3829">3829: </a>                }
+<a name="line3830">3830: </a>        }
+<a name="line3831">3831: </a>}
+<a name="line3832">3832: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line3833">3833: </a>
+<a name="line3834">3834: </a><font color="#800000">/*</font>
+<a name="line3835">3835: </a><font color="#800000"> * timeout is called to arrange that</font>
+<a name="line3836">3836: </a><font color="#800000"> * fun(arg) is called in tim/HZ seconds.</font>
+<a name="line3837">3837: </a><font color="#800000"> * An entry is sorted into the callout</font>
+<a name="line3838">3838: </a><font color="#800000"> * structure. The time in each structure</font>
+<a name="line3839">3839: </a><font color="#800000"> * entry is the number of HZ's more</font>
+<a name="line3840">3840: </a><font color="#800000"> * than the previous entry.</font>
+<a name="line3841">3841: </a><font color="#800000"> * In this way, decrementing the</font>
+<a name="line3842">3842: </a><font color="#800000"> * first entry has the effect of</font>
+<a name="line3843">3843: </a><font color="#800000"> * updating all entries.</font>
+<a name="line3844">3844: </a><font color="#800000"> */</font>
+<a name="line3845">3845: </a><font color="#000000"><a name="imeout"></a>timeout(fun, arg, tim)</font>
+<a name="line3846">3846: </a>{
+<a name="line3847">3847: </a>        register <font color="#000000">struct callo</font> *p1, *p2;
+<a name="line3848">3848: </a>        register t;
+<a name="line3849">3849: </a>        int s;
+<a name="line3850">3850: </a>
+<a name="line3851">3851: </a>        t = tim;
+<a name="line3852">3852: </a>        s = PS-&gt;integ;
+<a name="line3853">3853: </a>        p1 = &amp;callout[0];
+<a name="line3854">3854: </a>        spl7();
+<a name="line3855">3855: </a>        <font color="#000000">while</font>(p1-&gt;c_func != 0 &amp;&amp; p1-&gt;c_time &lt;= t) {
+<a name="line3856">3856: </a>                t =- p1-&gt;c_time;
+<a name="line3857">3857: </a>                p1++;
+<a name="line3858">3858: </a>        }
+<a name="line3859">3859: </a>        p1-&gt;c_time =- t;
+<a name="line3860">3860: </a>        p2 = p1;
+<a name="line3861">3861: </a>        <font color="#000000">while</font>(p2-&gt;c_func != 0)
+<a name="line3862">3862: </a>                p2++;
+<a name="line3863">3863: </a>        <font color="#000000">while</font>(p2 &gt;= p1) {
+<a name="line3864">3864: </a>                (p2+1)-&gt;c_time = p2-&gt;c_time;
+<a name="line3865">3865: </a>                (p2+1)-&gt;c_func = p2-&gt;c_func;
+<a name="line3866">3866: </a>                (p2+1)-&gt;c_arg = p2-&gt;c_arg;
+<a name="line3867">3867: </a>                p2--;
+<a name="line3868">3868: </a>        }
+<a name="line3869">3869: </a>        p1-&gt;c_time = t;
+<a name="line3870">3870: </a>        p1-&gt;c_func = fun;
+<a name="line3871">3871: </a>        p1-&gt;c_arg = arg;
+<a name="line3872">3872: </a>        PS-&gt;integ = s;
+<a name="line3873">3873: </a>}
+<a name="line3874">3874: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

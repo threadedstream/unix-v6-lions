@@ -1,0 +1,208 @@
+
+<html>
+<head>
+<title>pipe.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line7700">7700: </a><font color="#000000">#include "../param.h"</font>
+<a name="line7701">7701: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line7702">7702: </a><font color="#000000">#include "../user.h"</font>
+<a name="line7703">7703: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line7704">7704: </a><font color="#000000">#include "../file.h"</font>
+<a name="line7705">7705: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line7706">7706: </a>
+<a name="line7707">7707: </a><font color="#800000">/* </font>
+<a name="line7708">7708: </a><font color="#800000"> * Max allowable buffering per pipe.</font>
+<a name="line7709">7709: </a><font color="#800000"> * This is also the max size of the</font>
+<a name="line7710">7710: </a><font color="#800000"> * file created to implement the pipe.</font>
+<a name="line7711">7711: </a><font color="#800000"> * If this size is bigger than 4096,</font>
+<a name="line7712">7712: </a><font color="#800000"> * pipes will be implemented in LARG</font>
+<a name="line7713">7713: </a><font color="#800000"> * files, which is probably not good.</font>
+<a name="line7714">7714: </a><font color="#800000"> */</font>
+<a name="line7715">7715: </a><font color="#000000">#define PIPSIZ  4096</font>
+<a name="line7716">7716: </a>
+<a name="line7717">7717: </a><font color="#800000">/*</font>
+<a name="line7718">7718: </a><font color="#800000"> * The sys-pipe entry.</font>
+<a name="line7719">7719: </a><font color="#800000"> * Allocate an inode on the root device.</font>
+<a name="line7720">7720: </a><font color="#800000"> * Allocate 2 file structures.</font>
+<a name="line7721">7721: </a><font color="#800000"> * Put it all together with flags.</font>
+<a name="line7722">7722: </a><font color="#800000"> */</font>
+<a name="line7723">7723: </a><font color="#000000"><a name="ipe"></a>pipe()</font>
+<a name="line7724">7724: </a>{
+<a name="line7725">7725: </a>        register *ip, *rf, *wf;
+<a name="line7726">7726: </a>        int r;
+<a name="line7727">7727: </a>
+<a name="line7728">7728: </a>        ip = ialloc(rootdev);
+<a name="line7729">7729: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line7730">7730: </a>                <font color="#000000">return</font>;
+<a name="line7731">7731: </a>        rf = falloc();
+<a name="line7732">7732: </a>        <font color="#000000">if</font>(rf == NULL) {
+<a name="line7733">7733: </a>                iput(ip);
+<a name="line7734">7734: </a>                <font color="#000000">return</font>;
+<a name="line7735">7735: </a>        }
+<a name="line7736">7736: </a>        r = u.u_ar0[R0];
+<a name="line7737">7737: </a>        wf = falloc();
+<a name="line7738">7738: </a>        <font color="#000000">if</font>(wf == NULL) {
+<a name="line7739">7739: </a>                rf-&gt;f_count = 0;
+<a name="line7740">7740: </a>                u.u_ofile[r] = NULL;
+<a name="line7741">7741: </a>                iput(ip);
+<a name="line7742">7742: </a>                <font color="#000000">return</font>;
+<a name="line7743">7743: </a>        }
+<a name="line7744">7744: </a>        u.u_ar0[R1] = u.u_ar0[R0];
+<a name="line7745">7745: </a>        u.u_ar0[R0] = r;
+<a name="line7746">7746: </a>        wf-&gt;f_flag = FWRITE|FPIPE;
+<a name="line7747">7747: </a>        wf-&gt;f_inode = ip;
+<a name="line7748">7748: </a>        rf-&gt;f_flag = FREAD|FPIPE;
+<a name="line7749">7749: </a>        rf-&gt;f_inode = ip;
+<a name="line7750">7750: </a>        ip-&gt;i_count = 2;
+<a name="line7751">7751: </a>        ip-&gt;i_flag = IACC|IUPD;
+<a name="line7752">7752: </a>        ip-&gt;i_mode = IALLOC;
+<a name="line7753">7753: </a>}
+<a name="line7754">7754: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7755">7755: </a>
+<a name="line7756">7756: </a><font color="#800000">/* Read call directed to a pipe.</font>
+<a name="line7757">7757: </a><font color="#800000"> */</font>
+<a name="line7758">7758: </a><font color="#000000"><a name="eadp"></a>readp(fp)</font>
+<a name="line7759">7759: </a>int *fp;
+<a name="line7760">7760: </a>{
+<a name="line7761">7761: </a>        register *rp, *ip;
+<a name="line7762">7762: </a>
+<a name="line7763">7763: </a>        rp = fp;
+<a name="line7764">7764: </a>        ip = rp-&gt;f_inode;
+<a name="line7765">7765: </a><font color="#000000">loop:</font>
+<a name="line7766">7766: </a>        <font color="#800000">/* Very conservative locking.</font>
+<a name="line7767">7767: </a><font color="#800000">         */</font>
+<a name="line7768">7768: </a>        plock(ip);
+<a name="line7769">7769: </a>        <font color="#800000">/* If the head (read) has caught up with</font>
+<a name="line7770">7770: </a><font color="#800000">         * the tail (write), reset both to 0.</font>
+<a name="line7771">7771: </a><font color="#800000">         */</font>
+<a name="line7772">7772: </a>        <font color="#000000">if</font>(rp-&gt;f_offset[1] == ip-&gt;i_size1) {
+<a name="line7773">7773: </a>                <font color="#000000">if</font>(rp-&gt;f_offset[1] != 0) {
+<a name="line7774">7774: </a>                        rp-&gt;f_offset[1] = 0;
+<a name="line7775">7775: </a>                        ip-&gt;i_size1 = 0;
+<a name="line7776">7776: </a>                        <font color="#000000">if</font>(ip-&gt;i_mode&amp;IWRITE) {
+<a name="line7777">7777: </a>                                ip-&gt;i_mode =&amp; ~IWRITE;
+<a name="line7778">7778: </a>                                wakeup(ip+1);
+<a name="line7779">7779: </a>                        }
+<a name="line7780">7780: </a>                }
+<a name="line7781">7781: </a>
+<a name="line7782">7782: </a>                <font color="#800000">/* If there are not both reader and</font>
+<a name="line7783">7783: </a><font color="#800000">                 * writer active, return without</font>
+<a name="line7784">7784: </a><font color="#800000">                 * satisfying read.</font>
+<a name="line7785">7785: </a><font color="#800000">                 */</font>
+<a name="line7786">7786: </a>                prele(ip);
+<a name="line7787">7787: </a>                <font color="#000000">if</font>(ip-&gt;i_count &lt; 2)
+<a name="line7788">7788: </a>                        <font color="#000000">return</font>;
+<a name="line7789">7789: </a>                ip-&gt;i_mode =| IREAD;
+<a name="line7790">7790: </a>                sleep(ip+2, PPIPE);
+<a name="line7791">7791: </a>                <font color="#000000">goto</font> loop;
+<a name="line7792">7792: </a>        }
+<a name="line7793">7793: </a>        <font color="#800000">/* Read and return</font>
+<a name="line7794">7794: </a><font color="#800000">         */</font>
+<a name="line7795">7795: </a>        u.u_offset[0] = 0;
+<a name="line7796">7796: </a>        u.u_offset[1] = rp-&gt;f_offset[1];
+<a name="line7797">7797: </a>        readi(ip);
+<a name="line7798">7798: </a>        rp-&gt;f_offset[1] = u.u_offset[1];
+<a name="line7799">7799: </a>        prele(ip);
+<a name="line7800">7800: </a>}
+<a name="line7801">7801: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7802">7802: </a>
+<a name="line7803">7803: </a><font color="#800000">/* Write call directed to a pipe.</font>
+<a name="line7804">7804: </a><font color="#800000"> */</font>
+<a name="line7805">7805: </a><font color="#000000"><a name="ritep"></a>writep(fp)</font>
+<a name="line7806">7806: </a>{
+<a name="line7807">7807: </a>        register *rp, *ip, c;
+<a name="line7808">7808: </a>
+<a name="line7809">7809: </a>        rp = fp;
+<a name="line7810">7810: </a>        ip = rp-&gt;f_inode;
+<a name="line7811">7811: </a>        c = u.u_count;
+<a name="line7812">7812: </a><font color="#000000">loop:</font>
+<a name="line7813">7813: </a>        <font color="#800000">/* If all done, return.</font>
+<a name="line7814">7814: </a><font color="#800000">         */</font>
+<a name="line7815">7815: </a>        plock(ip);
+<a name="line7816">7816: </a>        <font color="#000000">if</font>(c == 0) {
+<a name="line7817">7817: </a>                prele(ip);
+<a name="line7818">7818: </a>                u.u_count = 0;
+<a name="line7819">7819: </a>                <font color="#000000">return</font>;
+<a name="line7820">7820: </a>        }
+<a name="line7821">7821: </a>        <font color="#800000">/* If there are not both read and</font>
+<a name="line7822">7822: </a><font color="#800000">         * write sides of the pipe active,</font>
+<a name="line7823">7823: </a><font color="#800000">         * return error and signal too.</font>
+<a name="line7824">7824: </a><font color="#800000">         */</font>
+<a name="line7825">7825: </a>        <font color="#000000">if</font>(ip-&gt;i_count &lt; 2) {
+<a name="line7826">7826: </a>                prele(ip);
+<a name="line7827">7827: </a>                u.u_error = EPIPE;
+<a name="line7828">7828: </a>                psignal(u.u_procp, SIGPIPE);
+<a name="line7829">7829: </a>                <font color="#000000">return</font>;
+<a name="line7830">7830: </a>        }
+<a name="line7831">7831: </a>        <font color="#800000">/* If the pipe is full,</font>
+<a name="line7832">7832: </a><font color="#800000">         * wait for reads to deplete</font>
+<a name="line7833">7833: </a><font color="#800000">         * and truncate it.</font>
+<a name="line7834">7834: </a><font color="#800000">         */</font>
+<a name="line7835">7835: </a>        <font color="#000000">if</font>(ip-&gt;i_size1 == PIPSIZ) {
+<a name="line7836">7836: </a>                ip-&gt;i_mode =| IWRITE;
+<a name="line7837">7837: </a>                prele(ip);
+<a name="line7838">7838: </a>                sleep(ip+1, PPIPE);
+<a name="line7839">7839: </a>                <font color="#000000">goto</font> loop;
+<a name="line7840">7840: </a>        }
+<a name="line7841">7841: </a>        <font color="#800000">/* Write what is possible and</font>
+<a name="line7842">7842: </a><font color="#800000">         * loop back.</font>
+<a name="line7843">7843: </a><font color="#800000">         */</font>
+<a name="line7844">7844: </a>        u.u_offset[0] = 0;
+<a name="line7845">7845: </a>        u.u_offset[1] = ip-&gt;i_size1;
+<a name="line7846">7846: </a>        u.u_count = min(c, PIPSIZ-u.u_offset[1]);
+<a name="line7847">7847: </a>        c =- u.u_count;
+<a name="line7848">7848: </a>        writei(ip);
+<a name="line7849">7849: </a>        prele(ip);
+<a name="line7850">7850: </a>        <font color="#000000">if</font>(ip-&gt;i_mode&amp;IREAD) {
+<a name="line7851">7851: </a>                ip-&gt;i_mode =&amp; ~IREAD;
+<a name="line7852">7852: </a>                wakeup(ip+2);
+<a name="line7853">7853: </a>        }
+<a name="line7854">7854: </a>        <font color="#000000">goto</font> loop;
+<a name="line7855">7855: </a>}
+<a name="line7856">7856: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7857">7857: </a>
+<a name="line7858">7858: </a><font color="#800000">/* Lock a pipe.</font>
+<a name="line7859">7859: </a><font color="#800000"> * If its already locked,</font>
+<a name="line7860">7860: </a><font color="#800000"> * set the WANT bit and sleep.</font>
+<a name="line7861">7861: </a><font color="#800000"> */</font>
+<a name="line7862">7862: </a><font color="#000000"><a name="lock"></a>plock(ip)</font>
+<a name="line7863">7863: </a>int *ip;
+<a name="line7864">7864: </a>{
+<a name="line7865">7865: </a>        register *rp;
+<a name="line7866">7866: </a>
+<a name="line7867">7867: </a>        rp = ip;
+<a name="line7868">7868: </a>        <font color="#000000">while</font>(rp-&gt;i_flag&amp;ILOCK) {
+<a name="line7869">7869: </a>                rp-&gt;i_flag =| IWANT;
+<a name="line7870">7870: </a>                sleep(rp, PPIPE);
+<a name="line7871">7871: </a>        }
+<a name="line7872">7872: </a>        rp-&gt;i_flag =| ILOCK;
+<a name="line7873">7873: </a>}
+<a name="line7874">7874: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7875">7875: </a>
+<a name="line7876">7876: </a><font color="#800000">/* Unlock a pipe.</font>
+<a name="line7877">7877: </a><font color="#800000"> * If WANT bit is on,</font>
+<a name="line7878">7878: </a><font color="#800000"> * wakeup.</font>
+<a name="line7879">7879: </a><font color="#800000"> * This routine is also used</font>
+<a name="line7880">7880: </a><font color="#800000"> * to unlock inodes in general.</font>
+<a name="line7881">7881: </a><font color="#800000"> */</font>
+<a name="line7882">7882: </a><font color="#000000"><a name="rele"></a>prele(ip)</font>
+<a name="line7883">7883: </a>int *ip;
+<a name="line7884">7884: </a>{
+<a name="line7885">7885: </a>        register *rp;
+<a name="line7886">7886: </a>
+<a name="line7887">7887: </a>        rp = ip;
+<a name="line7888">7888: </a>        rp-&gt;i_flag =&amp; ~ILOCK;
+<a name="line7889">7889: </a>        <font color="#000000">if</font>(rp-&gt;i_flag&amp;IWANT) {
+<a name="line7890">7890: </a>                rp-&gt;i_flag =&amp; ~IWANT;
+<a name="line7891">7891: </a>                wakeup(rp);
+<a name="line7892">7892: </a>        }
+<a name="line7893">7893: </a>}
+<a name="line7894">7894: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

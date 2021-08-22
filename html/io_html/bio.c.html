@@ -1,0 +1,660 @@
+
+<html>
+<head>
+<title>bio.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4700">4700: </a><font color="#000000">#</font>
+<a name="line4701">4701: </a><font color="#800000">/*</font>
+<a name="line4702">4702: </a><font color="#800000"> */</font>
+<a name="line4703">4703: </a>
+<a name="line4704">4704: </a><font color="#000000">#include "../param.h"</font>
+<a name="line4705">4705: </a><font color="#000000">#include "../user.h"</font>
+<a name="line4706">4706: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line4707">4707: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line4708">4708: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line4709">4709: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line4710">4710: </a><font color="#000000">#include "../seg.h"</font>
+<a name="line4711">4711: </a>
+<a name="line4712">4712: </a><font color="#800000">/*</font>
+<a name="line4713">4713: </a><font color="#800000"> * This is the set of buffers proper, whose heads</font>
+<a name="line4714">4714: </a><font color="#800000"> * were declared in buf.h.  There can exist buffer</font>
+<a name="line4715">4715: </a><font color="#800000"> * headers not pointing here that are used purely</font>
+<a name="line4716">4716: </a><font color="#800000"> * as arguments to the I/O routines to describe</font>
+<a name="line4717">4717: </a><font color="#800000"> * I/O to be done-- e.g. swbuf, just below, for</font>
+<a name="line4718">4718: </a><font color="#800000"> * swapping.</font>
+<a name="line4719">4719: </a><font color="#800000"> */</font>
+<a name="line4720">4720: </a>char    buffers[NBUF][514];
+<a name="line4721">4721: </a><font color="#000000">struct</font>  buf     swbuf;
+<a name="line4722">4722: </a>
+<a name="line4723">4723: </a><font color="#800000">/*</font>
+<a name="line4724">4724: </a><font color="#800000"> * Declarations of the tables for the magtape devices;</font>
+<a name="line4725">4725: </a><font color="#800000"> * see bdwrite.</font>
+<a name="line4726">4726: </a><font color="#800000"> */</font>
+<a name="line4727">4727: </a>int     tmtab;
+<a name="line4728">4728: </a>int     httab;
+<a name="line4729">4729: </a>
+<a name="line4730">4730: </a><font color="#800000">/*</font>
+<a name="line4731">4731: </a><font color="#800000"> * The following several routines allocate and free</font>
+<a name="line4732">4732: </a><font color="#800000"> * buffers with various side effects.  In general the</font>
+<a name="line4733">4733: </a><font color="#800000"> * arguments to an allocate routine are a device and</font>
+<a name="line4734">4734: </a><font color="#800000"> * a block number, and the value is a pointer to</font>
+<a name="line4735">4735: </a><font color="#800000"> * to the buffer header; the buffer is marked "busy"</font>
+<a name="line4736">4736: </a><font color="#800000"> * so that no on else can touch it.  If the block was</font>
+<a name="line4737">4737: </a><font color="#800000"> * already in core, no I/O need be done; if it is</font>
+<a name="line4738">4738: </a><font color="#800000"> * already busy, the process waits until it becomes free.</font>
+<a name="line4739">4739: </a><font color="#800000"> * The following routines allocate a buffer:</font>
+<a name="line4740">4740: </a><font color="#800000"> *      getblk</font>
+<a name="line4741">4741: </a><font color="#800000"> *      bread</font>
+<a name="line4742">4742: </a><font color="#800000"> *      breada</font>
+<a name="line4743">4743: </a><font color="#800000"> * Eventually the buffer must be released, possibly with the</font>
+<a name="line4744">4744: </a><font color="#800000"> * side effect of writing it out, by using one of</font>
+<a name="line4745">4745: </a><font color="#800000"> *      bwrite</font>
+<a name="line4746">4746: </a><font color="#800000"> *      bdwrite</font>
+<a name="line4747">4747: </a><font color="#800000"> *      bawrite</font>
+<a name="line4748">4748: </a><font color="#800000"> *      brelse</font>
+<a name="line4749">4749: </a><font color="#800000"> */</font>
+<a name="line4750">4750: </a>
+<a name="line4751">4751: </a><font color="#800000">/*</font>
+<a name="line4752">4752: </a><font color="#800000"> * Read in (if necessary) the block and return a buffer pointer.</font>
+<a name="line4753">4753: </a><font color="#800000"> */</font>
+<a name="line4754">4754: </a><font color="#000000"><a name="read"></a>bread(dev, blkno)</font>
+<a name="line4755">4755: </a>{
+<a name="line4756">4756: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line4757">4757: </a>
+<a name="line4758">4758: </a>        rbp = getblk(dev, blkno);
+<a name="line4759">4759: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_DONE)
+<a name="line4760">4760: </a>                <font color="#000000">return</font>(rbp);
+<a name="line4761">4761: </a>        rbp-&gt;b_flags =| B_READ;
+<a name="line4762">4762: </a>        rbp-&gt;b_wcount = -256;
+<a name="line4763">4763: </a>        (*bdevsw[dev.d_major].d_strategy)(rbp);
+<a name="line4764">4764: </a>        iowait(rbp);
+<a name="line4765">4765: </a>        <font color="#000000">return</font>(rbp);
+<a name="line4766">4766: </a>}
+<a name="line4767">4767: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4768">4768: </a>
+<a name="line4769">4769: </a><font color="#800000">/*</font>
+<a name="line4770">4770: </a><font color="#800000"> * Read in the block, like bread, but also start I/O on the</font>
+<a name="line4771">4771: </a><font color="#800000"> * read-ahead block (which is not allocated to the caller)</font>
+<a name="line4772">4772: </a><font color="#800000"> */</font>
+<a name="line4773">4773: </a><font color="#000000"><a name="reada"></a>breada(adev, blkno, rablkno)</font>
+<a name="line4774">4774: </a>{
+<a name="line4775">4775: </a>        register <font color="#000000">struct buf</font> *rbp, *rabp;
+<a name="line4776">4776: </a>        register int dev;
+<a name="line4777">4777: </a>
+<a name="line4778">4778: </a>        dev = adev;
+<a name="line4779">4779: </a>        rbp = 0;
+<a name="line4780">4780: </a>        <font color="#000000">if</font> (!incore(dev, blkno)) {
+<a name="line4781">4781: </a>                rbp = getblk(dev, blkno);
+<a name="line4782">4782: </a>                <font color="#000000">if</font> ((rbp-&gt;b_flags&amp;B_DONE) == 0) {
+<a name="line4783">4783: </a>                        rbp-&gt;b_flags =| B_READ;
+<a name="line4784">4784: </a>                        rbp-&gt;b_wcount = -256;
+<a name="line4785">4785: </a>                        (*bdevsw[adev.d_major].d_strategy)(rbp);
+<a name="line4786">4786: </a>                }
+<a name="line4787">4787: </a>        }
+<a name="line4788">4788: </a>        <font color="#000000">if</font> (rablkno &amp;&amp; !incore(dev, rablkno)) {
+<a name="line4789">4789: </a>                rabp = getblk(dev, rablkno);
+<a name="line4790">4790: </a>                <font color="#000000">if</font> (rabp-&gt;b_flags &amp; B_DONE)
+<a name="line4791">4791: </a>                        brelse(rabp);
+<a name="line4792">4792: </a>                <font color="#000000">else</font> {
+<a name="line4793">4793: </a>                        rabp-&gt;b_flags =| B_READ|B_ASYNC;
+<a name="line4794">4794: </a>                        rabp-&gt;b_wcount = -256;
+<a name="line4795">4795: </a>                        (*bdevsw[adev.d_major].d_strategy)(rabp);
+<a name="line4796">4796: </a>                }
+<a name="line4797">4797: </a>        }
+<a name="line4798">4798: </a>        <font color="#000000">if</font> (rbp==0)
+<a name="line4799">4799: </a>                <font color="#000000">return</font>(bread(dev, blkno));
+<a name="line4800">4800: </a>        iowait(rbp);
+<a name="line4801">4801: </a>        <font color="#000000">return</font>(rbp);
+<a name="line4802">4802: </a>}
+<a name="line4803">4803: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4804">4804: </a>
+<a name="line4805">4805: </a><font color="#800000">/*</font>
+<a name="line4806">4806: </a><font color="#800000"> * Write the buffer, waiting for completion.</font>
+<a name="line4807">4807: </a><font color="#800000"> * Then release the buffer.</font>
+<a name="line4808">4808: </a><font color="#800000"> */</font>
+<a name="line4809">4809: </a><font color="#000000"><a name="write"></a>bwrite(bp)</font>
+<a name="line4810">4810: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line4811">4811: </a>{
+<a name="line4812">4812: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line4813">4813: </a>        register flag;
+<a name="line4814">4814: </a>
+<a name="line4815">4815: </a>        rbp = bp;
+<a name="line4816">4816: </a>        flag = rbp-&gt;b_flags;
+<a name="line4817">4817: </a>        rbp-&gt;b_flags =&amp; ~(B_READ | B_DONE | B_ERROR | B_DELWRI);
+<a name="line4818">4818: </a>        rbp-&gt;b_wcount = -256;
+<a name="line4819">4819: </a>        (*bdevsw[rbp-&gt;b_dev.d_major].d_strategy)(rbp);
+<a name="line4820">4820: </a>        <font color="#000000">if</font> ((flag&amp;B_ASYNC) == 0) {
+<a name="line4821">4821: </a>                iowait(rbp);
+<a name="line4822">4822: </a>                brelse(rbp);
+<a name="line4823">4823: </a>        } <font color="#000000">else</font> <font color="#000000">if</font> ((flag&amp;B_DELWRI)==0)
+<a name="line4824">4824: </a>                geterror(rbp);
+<a name="line4825">4825: </a>}
+<a name="line4826">4826: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4827">4827: </a>
+<a name="line4828">4828: </a><font color="#800000">/*</font>
+<a name="line4829">4829: </a><font color="#800000"> * Release the buffer, marking it so that if it is grabbed</font>
+<a name="line4830">4830: </a><font color="#800000"> * for another purpose it will be written out before being</font>
+<a name="line4831">4831: </a><font color="#800000"> * given up (e.g. when writing a partial block where it is</font>
+<a name="line4832">4832: </a><font color="#800000"> * assumed that another write for the same block will soon follow).</font>
+<a name="line4833">4833: </a><font color="#800000"> * This can't be done for magtape, since writes must be done</font>
+<a name="line4834">4834: </a><font color="#800000"> * in the same order as requested.</font>
+<a name="line4835">4835: </a><font color="#800000"> */</font>
+<a name="line4836">4836: </a><font color="#000000"><a name="dwrite"></a>bdwrite(bp)</font>
+<a name="line4837">4837: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line4838">4838: </a>{
+<a name="line4839">4839: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line4840">4840: </a>        register <font color="#000000">struct devtab</font> *dp;
+<a name="line4841">4841: </a>
+<a name="line4842">4842: </a>        rbp = bp;
+<a name="line4843">4843: </a>        dp = bdevsw[rbp-&gt;b_dev.d_major].d_tab;
+<a name="line4844">4844: </a>        <font color="#000000">if</font> (dp == &amp;tmtab || dp == &amp;httab)
+<a name="line4845">4845: </a>                bawrite(rbp);
+<a name="line4846">4846: </a>        <font color="#000000">else</font> {
+<a name="line4847">4847: </a>                rbp-&gt;b_flags =| B_DELWRI | B_DONE;
+<a name="line4848">4848: </a>                brelse(rbp);
+<a name="line4849">4849: </a>        }
+<a name="line4850">4850: </a>}
+<a name="line4851">4851: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4852">4852: </a>
+<a name="line4853">4853: </a><font color="#800000">/*</font>
+<a name="line4854">4854: </a><font color="#800000"> * Release the buffer, start I/O on it, but don't wait for completion.</font>
+<a name="line4855">4855: </a><font color="#800000"> */</font>
+<a name="line4856">4856: </a><font color="#000000"><a name="awrite"></a>bawrite(bp)</font>
+<a name="line4857">4857: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line4858">4858: </a>{
+<a name="line4859">4859: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line4860">4860: </a>
+<a name="line4861">4861: </a>        rbp = bp;
+<a name="line4862">4862: </a>        rbp-&gt;b_flags =| B_ASYNC;
+<a name="line4863">4863: </a>        bwrite(rbp);
+<a name="line4864">4864: </a>}
+<a name="line4865">4865: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4866">4866: </a>
+<a name="line4867">4867: </a><font color="#800000">/* release the buffer, with no I/O implied.</font>
+<a name="line4868">4868: </a><font color="#800000"> */</font>
+<a name="line4869">4869: </a><font color="#000000"><a name="relse"></a>brelse(bp)</font>
+<a name="line4870">4870: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line4871">4871: </a>{
+<a name="line4872">4872: </a>        register <font color="#000000">struct buf</font> *rbp, **backp;
+<a name="line4873">4873: </a>        register int sps;
+<a name="line4874">4874: </a>
+<a name="line4875">4875: </a>        rbp = bp;
+<a name="line4876">4876: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_WANTED)
+<a name="line4877">4877: </a>                wakeup(rbp);
+<a name="line4878">4878: </a>        <font color="#000000">if</font> (bfreelist.b_flags&amp;B_WANTED) {
+<a name="line4879">4879: </a>                bfreelist.b_flags =&amp; ~B_WANTED;
+<a name="line4880">4880: </a>                wakeup(&amp;bfreelist);
+<a name="line4881">4881: </a>        }
+<a name="line4882">4882: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_ERROR)
+<a name="line4883">4883: </a>                rbp-&gt;b_dev.d_minor = -1;  <font color="#800000">/* no assoc. on error */</font>
+<a name="line4884">4884: </a>        backp = &amp;bfreelist.av_back;
+<a name="line4885">4885: </a>        sps = PS-&gt;integ;
+<a name="line4886">4886: </a>        spl6();
+<a name="line4887">4887: </a>        rbp-&gt;b_flags =&amp; ~(B_WANTED|B_BUSY|B_ASYNC);
+<a name="line4888">4888: </a>        (*backp)-&gt;av_forw = rbp;
+<a name="line4889">4889: </a>        rbp-&gt;av_back = *backp;
+<a name="line4890">4890: </a>        *backp = rbp;
+<a name="line4891">4891: </a>        rbp-&gt;av_forw = &amp;bfreelist;
+<a name="line4892">4892: </a>        PS-&gt;integ = sps;
+<a name="line4893">4893: </a>}
+<a name="line4894">4894: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4895">4895: </a>
+<a name="line4896">4896: </a><font color="#800000">/* See if the block is associated with some buffer</font>
+<a name="line4897">4897: </a><font color="#800000"> * (mainly to avoid getting hung up on a wait in breada)</font>
+<a name="line4898">4898: </a><font color="#800000"> */</font>
+<a name="line4899">4899: </a><font color="#000000"><a name="ncore"></a>incore(adev, blkno)</font>
+<a name="line4900">4900: </a>{
+<a name="line4901">4901: </a>        register int dev;
+<a name="line4902">4902: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line4903">4903: </a>        register <font color="#000000">struct devtab</font> *dp;
+<a name="line4904">4904: </a>
+<a name="line4905">4905: </a>        dev = adev;
+<a name="line4906">4906: </a>        dp = bdevsw[adev.d_major].d_tab;
+<a name="line4907">4907: </a>        <font color="#000000">for</font> (bp=dp-&gt;b_forw; bp != dp; bp = bp-&gt;b_forw)
+<a name="line4908">4908: </a>                <font color="#000000">if</font> (bp-&gt;b_blkno==blkno &amp;&amp; bp-&gt;b_dev==dev)
+<a name="line4909">4909: </a>                        <font color="#000000">return</font>(bp);
+<a name="line4910">4910: </a>        <font color="#000000">return</font>(0);
+<a name="line4911">4911: </a>}
+<a name="line4912">4912: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4913">4913: </a>
+<a name="line4914">4914: </a><font color="#800000">/* Assign a buffer for the given block.  If the appropriate</font>
+<a name="line4915">4915: </a><font color="#800000"> * block is already associated, return it; otherwise search</font>
+<a name="line4916">4916: </a><font color="#800000"> * for the oldest non-busy buffer and reassign it.</font>
+<a name="line4917">4917: </a><font color="#800000"> * When a 512-byte area is wanted for some random reason</font>
+<a name="line4918">4918: </a><font color="#800000"> * (e.g. during exec, for the user arglist) getblk can be called</font>
+<a name="line4919">4919: </a><font color="#800000"> * with device NODEV to avoid unwanted associativity.</font>
+<a name="line4920">4920: </a><font color="#800000"> */</font>
+<a name="line4921">4921: </a><font color="#000000"><a name="etblk"></a>getblk(dev, blkno)</font>
+<a name="line4922">4922: </a>{
+<a name="line4923">4923: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line4924">4924: </a>        register <font color="#000000">struct devtab</font> *dp;
+<a name="line4925">4925: </a>        extern lbolt;
+<a name="line4926">4926: </a>
+<a name="line4927">4927: </a>        <font color="#000000">if</font>(dev.d_major &gt;= nblkdev)
+<a name="line4928">4928: </a>                panic(<font color="#000000">"blkdev"</font>);
+<a name="line4929">4929: </a>
+<a name="line4930">4930: </a><font color="#000000">    loop:</font>
+<a name="line4931">4931: </a>        <font color="#000000">if</font> (dev &lt; 0)
+<a name="line4932">4932: </a>                dp = &amp;bfreelist;
+<a name="line4933">4933: </a>        <font color="#000000">else</font> {
+<a name="line4934">4934: </a>                dp = bdevsw[dev.d_major].d_tab;
+<a name="line4935">4935: </a>                <font color="#000000">if</font>(dp == NULL)
+<a name="line4936">4936: </a>                        panic(<font color="#000000">"devtab"</font>);
+<a name="line4937">4937: </a>                <font color="#000000">for</font> (bp=dp-&gt;b_forw; bp != dp; bp = bp-&gt;b_forw) {
+<a name="line4938">4938: </a>                        <font color="#000000">if</font> (bp-&gt;b_blkno!=blkno || bp-&gt;b_dev!=dev)
+<a name="line4939">4939: </a>                                <font color="#000000">continue</font>;
+<a name="line4940">4940: </a>                        spl6();
+<a name="line4941">4941: </a>                        <font color="#000000">if</font> (bp-&gt;b_flags&amp;B_BUSY) {
+<a name="line4942">4942: </a>                                bp-&gt;b_flags =| B_WANTED;
+<a name="line4943">4943: </a>                                sleep(bp, PRIBIO);
+<a name="line4944">4944: </a>                                spl0();
+<a name="line4945">4945: </a>                                <font color="#000000">goto</font> loop;
+<a name="line4946">4946: </a>                        }
+<a name="line4947">4947: </a>                        spl0();
+<a name="line4948">4948: </a>                        notavail(bp);
+<a name="line4949">4949: </a>                        <font color="#000000">return</font>(bp);
+<a name="line4950">4950: </a>                }
+<a name="line4951">4951: </a>        }
+<a name="line4952">4952: </a>        spl6();
+<a name="line4953">4953: </a>        <font color="#000000">if</font> (bfreelist.av_forw == &amp;bfreelist) {
+<a name="line4954">4954: </a>                bfreelist.b_flags =| B_WANTED;
+<a name="line4955">4955: </a>                sleep(&amp;bfreelist, PRIBIO);
+<a name="line4956">4956: </a>                spl0();
+<a name="line4957">4957: </a>                <font color="#000000">goto</font> loop;
+<a name="line4958">4958: </a>        }
+<a name="line4959">4959: </a>        spl0();
+<a name="line4960">4960: </a>        notavail(bp = bfreelist.av_forw);
+<a name="line4961">4961: </a>        <font color="#000000">if</font> (bp-&gt;b_flags &amp; B_DELWRI) {
+<a name="line4962">4962: </a>                bp-&gt;b_flags =| B_ASYNC;
+<a name="line4963">4963: </a>                bwrite(bp);
+<a name="line4964">4964: </a>                <font color="#000000">goto</font> loop;
+<a name="line4965">4965: </a>        }
+<a name="line4966">4966: </a>        bp-&gt;b_flags = B_BUSY | B_RELOC;
+<a name="line4967">4967: </a>        bp-&gt;b_back-&gt;b_forw = bp-&gt;b_forw;
+<a name="line4968">4968: </a>        bp-&gt;b_forw-&gt;b_back = bp-&gt;b_back;
+<a name="line4969">4969: </a>        bp-&gt;b_forw = dp-&gt;b_forw;
+<a name="line4970">4970: </a>        bp-&gt;b_back = dp;
+<a name="line4971">4971: </a>        dp-&gt;b_forw-&gt;b_back = bp;
+<a name="line4972">4972: </a>        dp-&gt;b_forw = bp;
+<a name="line4973">4973: </a>        bp-&gt;b_dev = dev;
+<a name="line4974">4974: </a>        bp-&gt;b_blkno = blkno;
+<a name="line4975">4975: </a>        <font color="#000000">return</font>(bp);
+<a name="line4976">4976: </a>}
+<a name="line4977">4977: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4978">4978: </a>
+<a name="line4979">4979: </a><font color="#800000">/* Wait for I/O completion on the buffer; return errors</font>
+<a name="line4980">4980: </a><font color="#800000"> * to the user.</font>
+<a name="line4981">4981: </a><font color="#800000"> */</font>
+<a name="line4982">4982: </a><font color="#000000"><a name="owait"></a>iowait(bp)</font>
+<a name="line4983">4983: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line4984">4984: </a>{
+<a name="line4985">4985: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line4986">4986: </a>
+<a name="line4987">4987: </a>        rbp = bp;
+<a name="line4988">4988: </a>        spl6();
+<a name="line4989">4989: </a>        <font color="#000000">while</font> ((rbp-&gt;b_flags&amp;B_DONE)==0)
+<a name="line4990">4990: </a>                sleep(rbp, PRIBIO);
+<a name="line4991">4991: </a>        spl0();
+<a name="line4992">4992: </a>        geterror(rbp);
+<a name="line4993">4993: </a>}
+<a name="line4994">4994: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4995">4995: </a>
+<a name="line4996">4996: </a><font color="#800000">/* Unlink a buffer from the available list and mark it busy.</font>
+<a name="line4997">4997: </a><font color="#800000"> * (internal interface)</font>
+<a name="line4998">4998: </a><font color="#800000"> */</font>
+<a name="line4999">4999: </a><font color="#000000"><a name="otavail"></a>notavail(bp)</font>
+<a name="line5000">5000: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5001">5001: </a>{
+<a name="line5002">5002: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line5003">5003: </a>        register int sps;
+<a name="line5004">5004: </a>
+<a name="line5005">5005: </a>        rbp = bp;
+<a name="line5006">5006: </a>        sps = PS-&gt;integ;
+<a name="line5007">5007: </a>        spl6();
+<a name="line5008">5008: </a>        rbp-&gt;av_back-&gt;av_forw = rbp-&gt;av_forw;
+<a name="line5009">5009: </a>        rbp-&gt;av_forw-&gt;av_back = rbp-&gt;av_back;
+<a name="line5010">5010: </a>        rbp-&gt;b_flags =| B_BUSY;
+<a name="line5011">5011: </a>        PS-&gt;integ = sps;
+<a name="line5012">5012: </a>}
+<a name="line5013">5013: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5014">5014: </a>
+<a name="line5015">5015: </a><font color="#800000">/* Mark I/O complete on a buffer, release it if I/O is asynchronous,</font>
+<a name="line5016">5016: </a><font color="#800000"> * and wake up anyone waiting for it.</font>
+<a name="line5017">5017: </a><font color="#800000"> */</font>
+<a name="line5018">5018: </a><font color="#000000"><a name="odone"></a>iodone(bp)</font>
+<a name="line5019">5019: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5020">5020: </a>{
+<a name="line5021">5021: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line5022">5022: </a>
+<a name="line5023">5023: </a>        rbp = bp;
+<a name="line5024">5024: </a>        <font color="#000000">if</font>(rbp-&gt;b_flags&amp;B_MAP)
+<a name="line5025">5025: </a>                mapfree(rbp);
+<a name="line5026">5026: </a>        rbp-&gt;b_flags =| B_DONE;
+<a name="line5027">5027: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_ASYNC)
+<a name="line5028">5028: </a>                brelse(rbp);
+<a name="line5029">5029: </a>        <font color="#000000">else</font> {
+<a name="line5030">5030: </a>                rbp-&gt;b_flags =&amp; ~B_WANTED;
+<a name="line5031">5031: </a>                wakeup(rbp);
+<a name="line5032">5032: </a>        }
+<a name="line5033">5033: </a>}
+<a name="line5034">5034: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5035">5035: </a>
+<a name="line5036">5036: </a><font color="#800000">/* Zero the core associated with a buffer.</font>
+<a name="line5037">5037: </a><font color="#800000"> */</font>
+<a name="line5038">5038: </a><font color="#000000"><a name="lrbuf"></a>clrbuf(bp)</font>
+<a name="line5039">5039: </a>int *bp;
+<a name="line5040">5040: </a>{
+<a name="line5041">5041: </a>        register *p;
+<a name="line5042">5042: </a>        register c;
+<a name="line5043">5043: </a>
+<a name="line5044">5044: </a>        p = bp-&gt;b_addr;
+<a name="line5045">5045: </a>        c = 256;
+<a name="line5046">5046: </a>        <font color="#000000">do</font>
+<a name="line5047">5047: </a>                *p++ = 0;
+<a name="line5048">5048: </a>        <font color="#000000">while</font> (--c);
+<a name="line5049">5049: </a>}
+<a name="line5050">5050: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5051">5051: </a>
+<a name="line5052">5052: </a><font color="#800000">/* Initialize the buffer I/O system by freeing</font>
+<a name="line5053">5053: </a><font color="#800000"> * all buffers and setting all device buffer lists to empty.</font>
+<a name="line5054">5054: </a><font color="#800000"> */</font>
+<a name="line5055">5055: </a><font color="#000000"><a name="init"></a>binit()</font>
+<a name="line5056">5056: </a>{
+<a name="line5057">5057: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5058">5058: </a>        register <font color="#000000">struct devtab</font> *dp;
+<a name="line5059">5059: </a>        register int i;
+<a name="line5060">5060: </a>        <font color="#000000">struct bdevsw</font> *bdp;
+<a name="line5061">5061: </a>
+<a name="line5062">5062: </a>        bfreelist.b_forw = bfreelist.b_back =
+<a name="line5063">5063: </a>            bfreelist.av_forw = bfreelist.av_back = &amp;bfreelist;
+<a name="line5064">5064: </a>        <font color="#000000">for</font> (i=0; i&lt;NBUF; i++) {
+<a name="line5065">5065: </a>                bp = &amp;buf[i];
+<a name="line5066">5066: </a>                bp-&gt;b_dev = -1;
+<a name="line5067">5067: </a>                bp-&gt;b_addr = buffers[i];
+<a name="line5068">5068: </a>                bp-&gt;b_back = &amp;bfreelist;
+<a name="line5069">5069: </a>                bp-&gt;b_forw = bfreelist.b_forw;
+<a name="line5070">5070: </a>                bfreelist.b_forw-&gt;b_back = bp;
+<a name="line5071">5071: </a>                bfreelist.b_forw = bp;
+<a name="line5072">5072: </a>                bp-&gt;b_flags = B_BUSY;
+<a name="line5073">5073: </a>                brelse(bp);
+<a name="line5074">5074: </a>        }
+<a name="line5075">5075: </a>        i = 0;
+<a name="line5076">5076: </a>        <font color="#000000">for</font> (bdp = bdevsw; bdp-&gt;d_open; bdp++) {
+<a name="line5077">5077: </a>                dp = bdp-&gt;d_tab;
+<a name="line5078">5078: </a>                <font color="#000000">if</font>(dp) {
+<a name="line5079">5079: </a>                        dp-&gt;b_forw = dp;
+<a name="line5080">5080: </a>                        dp-&gt;b_back = dp;
+<a name="line5081">5081: </a>                }
+<a name="line5082">5082: </a>                i++;
+<a name="line5083">5083: </a>        }
+<a name="line5084">5084: </a>        nblkdev = i;
+<a name="line5085">5085: </a>}
+<a name="line5086">5086: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5087">5087: </a>
+<a name="line5088">5088: </a><font color="#800000">/* Device start routine for disks</font>
+<a name="line5089">5089: </a><font color="#800000"> * and other devices that have the register</font>
+<a name="line5090">5090: </a><font color="#800000"> * layout of the older DEC controllers (RF, RK, RP, TM)</font>
+<a name="line5091">5091: </a><font color="#800000"> */</font>
+<a name="line5092">5092: </a><font color="#000000">#define IENABLE 0100</font>
+<a name="line5093">5093: </a><font color="#000000">#define WCOM    02</font>
+<a name="line5094">5094: </a><font color="#000000">#define RCOM    04</font>
+<a name="line5095">5095: </a><font color="#000000">#define GO      01</font>
+<a name="line5096">5096: </a><font color="#000000"><a name="evstart"></a>devstart(bp, devloc, devblk, hbcom)</font>
+<a name="line5097">5097: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5098">5098: </a>int *devloc;
+<a name="line5099">5099: </a>{
+<a name="line5100">5100: </a>        register int *dp;
+<a name="line5101">5101: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line5102">5102: </a>        register int com;
+<a name="line5103">5103: </a>
+<a name="line5104">5104: </a>        dp = devloc;
+<a name="line5105">5105: </a>        rbp = bp;
+<a name="line5106">5106: </a>        *dp = devblk;                   <font color="#800000">/* block address */</font>
+<a name="line5107">5107: </a>        *--dp = rbp-&gt;b_addr;            <font color="#800000">/* buffer address */</font>
+<a name="line5108">5108: </a>        *--dp = rbp-&gt;b_wcount;          <font color="#800000">/* word count */</font>
+<a name="line5109">5109: </a>        com = (hbcom&lt;&lt;8) | IENABLE | GO |
+<a name="line5110">5110: </a>                ((rbp-&gt;b_xmem &amp; 03) &lt;&lt; 4);
+<a name="line5111">5111: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_READ)        <font color="#800000">/* command + x-mem */</font>
+<a name="line5112">5112: </a>                com =| RCOM;
+<a name="line5113">5113: </a>        <font color="#000000">else</font>
+<a name="line5114">5114: </a>                com =| WCOM;
+<a name="line5115">5115: </a>        *--dp = com;
+<a name="line5116">5116: </a>}
+<a name="line5117">5117: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5118">5118: </a>
+<a name="line5119">5119: </a><font color="#800000">/* startup routine for RH controllers. */</font>
+<a name="line5120">5120: </a><font color="#000000">#define RHWCOM  060</font>
+<a name="line5121">5121: </a><font color="#000000">#define RHRCOM  070</font>
+<a name="line5122">5122: </a>
+<a name="line5123">5123: </a><font color="#000000"><a name="hstart"></a>rhstart(bp, devloc, devblk, abae)</font>
+<a name="line5124">5124: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5125">5125: </a>int *devloc, *abae;
+<a name="line5126">5126: </a>{
+<a name="line5127">5127: </a>        register int *dp;
+<a name="line5128">5128: </a>        register <font color="#000000">struct buf</font> *rbp;
+<a name="line5129">5129: </a>        register int com;
+<a name="line5130">5130: </a>
+<a name="line5131">5131: </a>        dp = devloc;
+<a name="line5132">5132: </a>        rbp = bp;
+<a name="line5133">5133: </a>        <font color="#000000">if</font>(cputype == 70)
+<a name="line5134">5134: </a>                *abae = rbp-&gt;b_xmem;
+<a name="line5135">5135: </a>        *dp = devblk;                   <font color="#800000">/* block address */</font>
+<a name="line5136">5136: </a>        *--dp = rbp-&gt;b_addr;            <font color="#800000">/* buffer address */</font>
+<a name="line5137">5137: </a>        *--dp = rbp-&gt;b_wcount;          <font color="#800000">/* word count */</font>
+<a name="line5138">5138: </a>        com = IENABLE | GO |
+<a name="line5139">5139: </a>                ((rbp-&gt;b_xmem &amp; 03) &lt;&lt; 8);
+<a name="line5140">5140: </a>        <font color="#000000">if</font> (rbp-&gt;b_flags&amp;B_READ)        <font color="#800000">/* command + x-mem */</font>
+<a name="line5141">5141: </a>                com =| RHRCOM; <font color="#000000">else</font>
+<a name="line5142">5142: </a>                com =| RHWCOM;
+<a name="line5143">5143: </a>        *--dp = com;
+<a name="line5144">5144: </a>}
+<a name="line5145">5145: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5146">5146: </a>
+<a name="line5147">5147: </a><font color="#800000">/*</font>
+<a name="line5148">5148: </a><font color="#800000"> * 11/70 routine to allocate the</font>
+<a name="line5149">5149: </a><font color="#800000"> * UNIBUS map and initialize for</font>
+<a name="line5150">5150: </a><font color="#800000"> * a unibus device.</font>
+<a name="line5151">5151: </a><font color="#800000"> * The code here and in</font>
+<a name="line5152">5152: </a><font color="#800000"> * rhstart assumes that an rh on an 11/70</font>
+<a name="line5153">5153: </a><font color="#800000"> * is an rh70 and contains 22 bit addressing.</font>
+<a name="line5154">5154: </a><font color="#800000"> */</font>
+<a name="line5155">5155: </a>int     maplock;
+<a name="line5156">5156: </a><font color="#000000"><a name="apalloc"></a>mapalloc(abp)</font>
+<a name="line5157">5157: </a><font color="#000000"><a name="buf"></a>struct buf </font>*abp;
+<a name="line5158">5158: </a>{
+<a name="line5159">5159: </a>        register i, a;
+<a name="line5160">5160: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5161">5161: </a>
+<a name="line5162">5162: </a>        <font color="#000000">if</font>(cputype != 70)
+<a name="line5163">5163: </a>                <font color="#000000">return</font>;
+<a name="line5164">5164: </a>        spl6();
+<a name="line5165">5165: </a>        <font color="#000000">while</font>(maplock&amp;B_BUSY) {
+<a name="line5166">5166: </a>                maplock =| B_WANTED;
+<a name="line5167">5167: </a>                sleep(&amp;maplock, PSWP);
+<a name="line5168">5168: </a>        }
+<a name="line5169">5169: </a>        maplock =| B_BUSY;
+<a name="line5170">5170: </a>        spl0();
+<a name="line5171">5171: </a>        bp = abp;
+<a name="line5172">5172: </a>        bp-&gt;b_flags =| B_MAP;
+<a name="line5173">5173: </a>        a = bp-&gt;b_xmem;
+<a name="line5174">5174: </a>        <font color="#000000">for</font>(i=16; i&lt;32; i=+2)
+<a name="line5175">5175: </a>                UBMAP-&gt;r[i+1] = a;
+<a name="line5176">5176: </a>        <font color="#000000">for</font>(a++; i&lt;48; i=+2)
+<a name="line5177">5177: </a>                UBMAP-&gt;r[i+1] = a;
+<a name="line5178">5178: </a>        bp-&gt;b_xmem = 1;
+<a name="line5179">5179: </a>}
+<a name="line5180">5180: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5181">5181: </a>
+<a name="line5182">5182: </a><font color="#000000"><a name="apfree"></a>mapfree(bp)</font>
+<a name="line5183">5183: </a><font color="#000000"><a name="buf"></a>struct buf </font>*bp;
+<a name="line5184">5184: </a>{
+<a name="line5185">5185: </a>
+<a name="line5186">5186: </a>        bp-&gt;b_flags =&amp; ~B_MAP;
+<a name="line5187">5187: </a>        <font color="#000000">if</font>(maplock&amp;B_WANTED)
+<a name="line5188">5188: </a>                wakeup(&amp;maplock);
+<a name="line5189">5189: </a>        maplock = 0;
+<a name="line5190">5190: </a>}
+<a name="line5191">5191: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5192">5192: </a>
+<a name="line5193">5193: </a><font color="#800000">/*</font>
+<a name="line5194">5194: </a><font color="#800000"> * swap I/O</font>
+<a name="line5195">5195: </a><font color="#800000"> */</font>
+<a name="line5196">5196: </a><font color="#000000"><a name="wap"></a>swap(blkno, coreaddr, count, rdflg)</font>
+<a name="line5197">5197: </a>{
+<a name="line5198">5198: </a>        register int *fp;
+<a name="line5199">5199: </a>
+<a name="line5200">5200: </a>        fp = &amp;swbuf.b_flags;
+<a name="line5201">5201: </a>        spl6();
+<a name="line5202">5202: </a>        <font color="#000000">while</font> (*fp&amp;B_BUSY) {
+<a name="line5203">5203: </a>                *fp =| B_WANTED;
+<a name="line5204">5204: </a>                sleep(fp, PSWP);
+<a name="line5205">5205: </a>        }
+<a name="line5206">5206: </a>        *fp = B_BUSY | B_PHYS | rdflg;
+<a name="line5207">5207: </a>        swbuf.b_dev = swapdev;
+<a name="line5208">5208: </a>        swbuf.b_wcount = - (count&lt;&lt;5);  <font color="#800000">/* 32 w/block */</font>
+<a name="line5209">5209: </a>        swbuf.b_blkno = blkno;
+<a name="line5210">5210: </a>        swbuf.b_addr = coreaddr&lt;&lt;6;     <font color="#800000">/* 64 b/block */</font>
+<a name="line5211">5211: </a>        swbuf.b_xmem = (coreaddr&gt;&gt;10) &amp; 077;
+<a name="line5212">5212: </a>        (*bdevsw[swapdev&gt;&gt;8].d_strategy)(&amp;swbuf);
+<a name="line5213">5213: </a>        spl6();
+<a name="line5214">5214: </a>        <font color="#000000">while</font>((*fp&amp;B_DONE)==0)
+<a name="line5215">5215: </a>                sleep(fp, PSWP);
+<a name="line5216">5216: </a>        <font color="#000000">if</font> (*fp&amp;B_WANTED)
+<a name="line5217">5217: </a>                wakeup(fp);
+<a name="line5218">5218: </a>        spl0();
+<a name="line5219">5219: </a>        *fp =&amp; ~(B_BUSY|B_WANTED);
+<a name="line5220">5220: </a>        <font color="#000000">return</font>(*fp&amp;B_ERROR);
+<a name="line5221">5221: </a>}
+<a name="line5222">5222: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5223">5223: </a>
+<a name="line5224">5224: </a><font color="#800000">/*</font>
+<a name="line5225">5225: </a><font color="#800000"> * make sure all write-behind blocks</font>
+<a name="line5226">5226: </a><font color="#800000"> * on dev (or NODEV for all)</font>
+<a name="line5227">5227: </a><font color="#800000"> * are flushed out.</font>
+<a name="line5228">5228: </a><font color="#800000"> * (from umount and update)</font>
+<a name="line5229">5229: </a><font color="#800000"> */</font>
+<a name="line5230">5230: </a><font color="#000000"><a name="flush"></a>bflush(dev)</font>
+<a name="line5231">5231: </a>{
+<a name="line5232">5232: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5233">5233: </a>
+<a name="line5234">5234: </a><font color="#000000">loop:</font>
+<a name="line5235">5235: </a>        spl6();
+<a name="line5236">5236: </a>        <font color="#000000">for</font> (bp = bfreelist.av_forw; bp != &amp;bfreelist; bp = bp-&gt;av_forw) {
+<a name="line5237">5237: </a>
+<a name="line5238">5238: </a>                <font color="#000000">if</font> (bp-&gt;b_flags&amp;B_DELWRI &amp;&amp; (dev == NODEV||dev==bp-&gt;b_dev)) {
+<a name="line5239">5239: </a>                        bp-&gt;b_flags =| B_ASYNC;
+<a name="line5240">5240: </a>                        notavail(bp);
+<a name="line5241">5241: </a>                        bwrite(bp);
+<a name="line5242">5242: </a>                        <font color="#000000">goto</font> loop;
+<a name="line5243">5243: </a>                }
+<a name="line5244">5244: </a>        }
+<a name="line5245">5245: </a>        spl0();
+<a name="line5246">5246: </a>}
+<a name="line5247">5247: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5248">5248: </a>
+<a name="line5249">5249: </a><font color="#800000">/*</font>
+<a name="line5250">5250: </a><font color="#800000"> * Raw I/O. The arguments are</font>
+<a name="line5251">5251: </a><font color="#800000"> *      The strategy routine for the device</font>
+<a name="line5252">5252: </a><font color="#800000"> *      A buffer, which will always be a special buffer</font>
+<a name="line5253">5253: </a><font color="#800000"> *        header owned exclusively by the device for this purpose</font>
+<a name="line5254">5254: </a><font color="#800000"> *      The device number</font>
+<a name="line5255">5255: </a><font color="#800000"> *      Read/write flag</font>
+<a name="line5256">5256: </a><font color="#800000"> * Essentially all the work is computing physical addresses and</font>
+<a name="line5257">5257: </a><font color="#800000"> * validating them.</font>
+<a name="line5258">5258: </a><font color="#800000"> */</font>
+<a name="line5259">5259: </a><font color="#000000"><a name="hysio"></a>physio(strat, abp, dev, rw)</font>
+<a name="line5260">5260: </a><font color="#000000"><a name="buf"></a>struct buf </font>*abp;
+<a name="line5261">5261: </a><font color="#000000">int (*strat)()</font>;
+<a name="line5262">5262: </a>{
+<a name="line5263">5263: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5264">5264: </a>        register char *base;
+<a name="line5265">5265: </a>        register int nb;
+<a name="line5266">5266: </a>        int ts;
+<a name="line5267">5267: </a>
+<a name="line5268">5268: </a>        bp = abp;
+<a name="line5269">5269: </a>        base = u.u_base;
+<a name="line5270">5270: </a>        <font color="#800000">/*</font>
+<a name="line5271">5271: </a><font color="#800000">         * Check odd base, odd count, and address wraparound</font>
+<a name="line5272">5272: </a><font color="#800000">         */</font>
+<a name="line5273">5273: </a>        <font color="#000000">if</font> (base&amp;01 || u.u_count&amp;01 || base&gt;=base+u.u_count)
+<a name="line5274">5274: </a>                <font color="#000000">goto</font> bad;
+<a name="line5275">5275: </a>        ts = (u.u_tsize+127) &amp; ~0177;
+<a name="line5276">5276: </a>        <font color="#000000">if</font> (u.u_sep)
+<a name="line5277">5277: </a>                ts = 0;
+<a name="line5278">5278: </a>        nb = (base&gt;&gt;6) &amp; 01777;
+<a name="line5279">5279: </a>        <font color="#800000">/*</font>
+<a name="line5280">5280: </a><font color="#800000">         * Check overlap with text. (ts and nb now</font>
+<a name="line5281">5281: </a><font color="#800000">         * in 64-byte clicks)</font>
+<a name="line5282">5282: </a><font color="#800000">         */</font>
+<a name="line5283">5283: </a>        <font color="#000000">if</font> (nb &lt; ts)
+<a name="line5284">5284: </a>                <font color="#000000">goto</font> bad;
+<a name="line5285">5285: </a>        <font color="#800000">/*</font>
+<a name="line5286">5286: </a><font color="#800000">         * Check that transfer is either entirely in the</font>
+<a name="line5287">5287: </a><font color="#800000">         * data or in the stack: that is, either</font>
+<a name="line5288">5288: </a><font color="#800000">         * the end is in the data or the start is in the stack</font>
+<a name="line5289">5289: </a><font color="#800000">         * (remember wraparound was already checked).</font>
+<a name="line5290">5290: </a><font color="#800000">         */</font>
+<a name="line5291">5291: </a>        <font color="#000000">if</font> ((((base+u.u_count)&gt;&gt;6)&amp;01777) &gt;= ts+u.u_dsize
+<a name="line5292">5292: </a>            &amp;&amp; nb &lt; 1024-u.u_ssize)
+<a name="line5293">5293: </a>                <font color="#000000">goto</font> bad;
+<a name="line5294">5294: </a>        spl6();
+<a name="line5295">5295: </a>        <font color="#000000">while</font> (bp-&gt;b_flags&amp;B_BUSY) {
+<a name="line5296">5296: </a>                bp-&gt;b_flags =| B_WANTED;
+<a name="line5297">5297: </a>                sleep(bp, PRIBIO);
+<a name="line5298">5298: </a>        }
+<a name="line5299">5299: </a>        bp-&gt;b_flags = B_BUSY | B_PHYS | rw;
+<a name="line5300">5300: </a>        bp-&gt;b_dev = dev;
+<a name="line5301">5301: </a>        <font color="#800000">/*</font>
+<a name="line5302">5302: </a><font color="#800000">         * Compute physical address by simulating</font>
+<a name="line5303">5303: </a><font color="#800000">         * the segmentation hardware.</font>
+<a name="line5304">5304: </a><font color="#800000">         */</font>
+<a name="line5305">5305: </a>        bp-&gt;b_addr = base&amp;077;
+<a name="line5306">5306: </a>        base = (u.u_sep? UDSA: UISA)-&gt;r[nb&gt;&gt;7] + (nb&amp;0177);
+<a name="line5307">5307: </a>        bp-&gt;b_addr =+ base&lt;&lt;6;
+<a name="line5308">5308: </a>        bp-&gt;b_xmem = (base&gt;&gt;10) &amp; 077;
+<a name="line5309">5309: </a>        bp-&gt;b_blkno = lshift(u.u_offset, -9);
+<a name="line5310">5310: </a>        bp-&gt;b_wcount = -((u.u_count&gt;&gt;1) &amp; 077777);
+<a name="line5311">5311: </a>        bp-&gt;b_error = 0;
+<a name="line5312">5312: </a>        u.u_procp-&gt;p_flag =| SLOCK;
+<a name="line5313">5313: </a>        (*strat)(bp);
+<a name="line5314">5314: </a>        spl6();
+<a name="line5315">5315: </a>        <font color="#000000">while</font> ((bp-&gt;b_flags&amp;B_DONE) == 0)
+<a name="line5316">5316: </a>                sleep(bp, PRIBIO);
+<a name="line5317">5317: </a>        u.u_procp-&gt;p_flag =&amp; ~SLOCK;
+<a name="line5318">5318: </a>        <font color="#000000">if</font> (bp-&gt;b_flags&amp;B_WANTED)
+<a name="line5319">5319: </a>                wakeup(bp);
+<a name="line5320">5320: </a>        spl0();
+<a name="line5321">5321: </a>        bp-&gt;b_flags =&amp; ~(B_BUSY|B_WANTED);
+<a name="line5322">5322: </a>        u.u_count = (-bp-&gt;b_resid)&lt;&lt;1;
+<a name="line5323">5323: </a>        geterror(bp);
+<a name="line5324">5324: </a>        <font color="#000000">return</font>;
+<a name="line5325">5325: </a><font color="#000000">    bad:</font>
+<a name="line5326">5326: </a>        u.u_error = EFAULT;
+<a name="line5327">5327: </a>}
+<a name="line5328">5328: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5329">5329: </a>
+<a name="line5330">5330: </a><font color="#800000">/*</font>
+<a name="line5331">5331: </a><font color="#800000"> * Pick up the device's error number and pass it to the user;</font>
+<a name="line5332">5332: </a><font color="#800000"> * if there is an error but the number is 0 set a generalized</font>
+<a name="line5333">5333: </a><font color="#800000"> * code.  Actually the latter is always true because devices</font>
+<a name="line5334">5334: </a><font color="#800000"> * don't yet return specific errors.</font>
+<a name="line5335">5335: </a><font color="#800000"> */</font>
+<a name="line5336">5336: </a><font color="#000000"><a name="eterror"></a>geterror(abp)</font>
+<a name="line5337">5337: </a><font color="#000000"><a name="buf"></a>struct buf </font>*abp;
+<a name="line5338">5338: </a>{
+<a name="line5339">5339: </a>        register <font color="#000000">struct buf</font> *bp;
+<a name="line5340">5340: </a>
+<a name="line5341">5341: </a>        bp = abp;
+<a name="line5342">5342: </a>        <font color="#000000">if</font> (bp-&gt;b_flags&amp;B_ERROR)
+<a name="line5343">5343: </a>                <font color="#000000">if</font> ((u.u_error = bp-&gt;b_error)==0)
+<a name="line5344">5344: </a>                        u.u_error = EIO;
+<a name="line5345">5345: </a>}
+<a name="line5346">5346: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

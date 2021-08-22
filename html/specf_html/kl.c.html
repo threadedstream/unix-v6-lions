@@ -1,0 +1,110 @@
+
+<html>
+<head>
+<title>kl.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line8000">8000: </a><font color="#000000">#</font>
+<a name="line8001">8001: </a><font color="#800000">/*   KL/DL-11 driver */</font>
+<a name="line8002">8002: </a><font color="#000000">#include "../param.h"</font>
+<a name="line8003">8003: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line8004">8004: </a><font color="#000000">#include "../user.h"</font>
+<a name="line8005">8005: </a><font color="#000000">#include "../tty.h"</font>
+<a name="line8006">8006: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line8007">8007: </a><font color="#800000">/* base address */</font>
+<a name="line8008">8008: </a><font color="#000000">#define KLADDR  0177560 </font><font color="#800000">/* console */</font><font color="#000000"></font>
+<a name="line8009">8009: </a><font color="#000000">#define KLBASE  0176500 </font><font color="#800000">/* kl and dl11-a */</font><font color="#000000"></font>
+<a name="line8010">8010: </a><font color="#000000">#define DLBASE  0175610 </font><font color="#800000">/* dl-e */</font><font color="#000000"></font>
+<a name="line8011">8011: </a><font color="#000000">#define NKL11   1</font>
+<a name="line8012">8012: </a><font color="#000000">#define NDL11   0</font>
+<a name="line8013">8013: </a><font color="#000000">#define DSRDY   02</font>
+<a name="line8014">8014: </a><font color="#000000">#define RDRENB  01</font>
+<a name="line8015">8015: </a><font color="#000000">struct</font>  tty kl11[NKL11+NDL11];
+<a name="line8016">8016: </a><font color="#000000"><a name="klregs"></a>struct klregs </font>{
+<a name="line8017">8017: </a>        int klrcsr;
+<a name="line8018">8018: </a>        int klrbuf;
+<a name="line8019">8019: </a>        int kltcsr;
+<a name="line8020">8020: </a>        int kltbuf;
+<a name="line8021">8021: </a>}
+<a name="line8022">8022: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8023">8023: </a><font color="#000000"><a name="lopen"></a>klopen(dev, flag)</font>
+<a name="line8024">8024: </a>{       register char *addr;
+<a name="line8025">8025: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8026">8026: </a>        <font color="#000000">if</font>(dev.d_minor &gt;= NKL11+NDL11) {
+<a name="line8027">8027: </a>                u.u_error = ENXIO;
+<a name="line8028">8028: </a>                <font color="#000000">return</font>;
+<a name="line8029">8029: </a>        }
+<a name="line8030">8030: </a>        tp = &amp;kl11[dev.d_minor];
+<a name="line8031">8031: </a>        <font color="#000000">if</font> (u.u_procp-&gt;p_ttyp == 0) {
+<a name="line8032">8032: </a>                u.u_procp-&gt;p_ttyp = tp;
+<a name="line8033">8033: </a>                tp-&gt;t_dev = dev;
+<a name="line8034">8034: </a>        }
+<a name="line8035">8035: </a>        <font color="#800000">/* set up minor 0 to address KLADDR</font>
+<a name="line8036">8036: </a><font color="#800000">         * set up minor 1 thru NKL11-1 to address from KLBASE</font>
+<a name="line8037">8037: </a><font color="#800000">         * set up minor NKL11 on to address from DLBASE</font>
+<a name="line8038">8038: </a><font color="#800000">         */</font>
+<a name="line8039">8039: </a>        addr = KLADDR + 8*dev.d_minor;
+<a name="line8040">8040: </a>        <font color="#000000">if</font>(dev.d_minor)
+<a name="line8041">8041: </a>                addr =+ KLBASE-KLADDR-8;
+<a name="line8042">8042: </a>        <font color="#000000">if</font>(dev.d_minor &gt;= NKL11)
+<a name="line8043">8043: </a>                addr =+ DLBASE-KLBASE-8*NKL11+8;
+<a name="line8044">8044: </a>        tp-&gt;t_addr = addr;
+<a name="line8045">8045: </a>        <font color="#000000">if</font> ((tp-&gt;t_state&amp;ISOPEN) == 0) {
+<a name="line8046">8046: </a>                tp-&gt;t_state = ISOPEN|CARR_ON;
+<a name="line8047">8047: </a>                tp-&gt;t_flags = XTABS|LCASE|ECHO|CRMOD;
+<a name="line8048">8048: </a>                tp-&gt;t_erase = CERASE;
+<a name="line8049">8049: </a>                tp-&gt;t_kill = CKILL;
+<a name="line8050">8050: </a>        }
+<a name="line8051">8051: </a>        addr-&gt;klrcsr =| IENABLE|DSRDY|RDRENB;
+<a name="line8052">8052: </a>        addr-&gt;kltcsr =| IENABLE;
+<a name="line8053">8053: </a>}
+<a name="line8054">8054: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8055">8055: </a><font color="#000000"><a name="lclose"></a>klclose(dev)</font>
+<a name="line8056">8056: </a>{       register <font color="#000000">struct tty</font> *tp;
+<a name="line8057">8057: </a>        tp = &amp;kl11[dev.d_minor];
+<a name="line8058">8058: </a>        wflushtty(tp);
+<a name="line8059">8059: </a>        tp-&gt;t_state = 0;
+<a name="line8060">8060: </a>}
+<a name="line8061">8061: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8062">8062: </a><font color="#000000"><a name="lread"></a>klread(dev)</font>
+<a name="line8063">8063: </a>{       ttread(&amp;kl11[dev.d_minor]);
+<a name="line8064">8064: </a>}
+<a name="line8065">8065: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8066">8066: </a><font color="#000000"><a name="lwrite"></a>klwrite(dev)</font>
+<a name="line8067">8067: </a>{       ttwrite(&amp;kl11[dev.d_minor]);
+<a name="line8068">8068: </a>}
+<a name="line8069">8069: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8070">8070: </a><font color="#000000"><a name="lxint"></a>klxint(dev)</font>
+<a name="line8071">8071: </a>{       register <font color="#000000">struct tty</font> *tp;
+<a name="line8072">8072: </a>        tp = &amp;kl11[dev.d_minor];
+<a name="line8073">8073: </a>        ttstart(tp);
+<a name="line8074">8074: </a>        <font color="#000000">if</font> (tp-&gt;t_outq.c_cc == 0 || tp-&gt;t_outq.c_cc == TTLOWAT)
+<a name="line8075">8075: </a>                wakeup(&amp;tp-&gt;t_outq);
+<a name="line8076">8076: </a>}
+<a name="line8077">8077: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8078">8078: </a><font color="#000000"><a name="lrint"></a>klrint(dev)</font>
+<a name="line8079">8079: </a>{       register int c, *addr;
+<a name="line8080">8080: </a>        register <font color="#000000">struct tty</font> *tp;
+<a name="line8081">8081: </a>        tp = &amp;kl11[dev.d_minor];
+<a name="line8082">8082: </a>        addr = tp-&gt;t_addr;
+<a name="line8083">8083: </a>        c = addr-&gt;klrbuf;
+<a name="line8084">8084: </a>        addr-&gt;klrcsr =| RDRENB;
+<a name="line8085">8085: </a>        <font color="#000000">if</font> ((c&amp;0177)==0)
+<a name="line8086">8086: </a>                addr-&gt;kltbuf = c;       <font color="#800000">/* hardware botch */</font>
+<a name="line8087">8087: </a>        ttyinput(c, tp);
+<a name="line8088">8088: </a>}
+<a name="line8089">8089: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line8090">8090: </a><font color="#000000"><a name="lsgtty"></a>klsgtty(dev, v)</font>
+<a name="line8091">8091: </a>int *v;
+<a name="line8092">8092: </a>{       register <font color="#000000">struct tty</font> *tp;
+<a name="line8093">8093: </a>        tp = &amp;kl11[dev.d_minor];
+<a name="line8094">8094: </a>        ttystty(tp, v);
+<a name="line8095">8095: </a>}
+<a name="line8096">8096: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

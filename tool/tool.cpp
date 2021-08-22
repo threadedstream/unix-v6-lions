@@ -6,8 +6,8 @@
 #include <filesystem>
 #include <map>
 #include <array>
-#include <cstring>
 #include <algorithm>
+#include <regex>
 
 /*
 
@@ -50,13 +50,23 @@
 
 static const char *BASE_URL = "https://pages.lip6.fr/Pierre.Sens/srcv6/";
 
-static std::array<std::filesystem::path, 5> directories = {
+static std::array<std::filesystem::path, 5> htmlDirectories = {
         "proc_html",
         "sys_html",
         "io_html",
         "filesys_html",
         "specf_html"
 };
+
+static std::array<std::filesystem::path, 5> cDirectories = {
+        "proc",
+        "sys",
+        "io",
+        "filesys",
+        "specf",
+};
+
+static const char* fourDigitsAndColonRegex = "[0-9]{4}[:]";
 
 
 static std::map<std::filesystem::path, std::vector<const char *>> unixDirFilesMap = {
@@ -78,7 +88,10 @@ static std::map<std::filesystem::path, std::vector<const char *>> unixDirFilesMa
                                  "pc.c.html",    "lp.c.html",   "mem.c.html"}}
 };
 
+
 void parse(std::string &contents);
+
+void parseExperimental(std::string &contents);
 
 std::string parseFile(const char *path);
 
@@ -92,24 +105,25 @@ void writeValidContentsToFile(std::string &contents, const char *fileName);
 
 void downloadFiles();
 
-void clean(const std::filesystem::path *problematicDir);
+void createCDirectories();
+
+void openFileAndReadContents(const char* path, std::string& contents);
+
+void clean(const std::array<std::filesystem::path, 5> &dirs, const std::filesystem::path *problematicDir);
 
 
 int main(int argc, char *argv[]) {
-    //downloadFiles();
+    downloadFiles();
+    createCDirectories();
     parseDirs();
 }
 
 void parseDirs() {
-    // allocation(1)
     std::ifstream stream;
     if (!stream) {
-        clean(nullptr);
+        clean(cDirectories, nullptr);
     }
-    for (auto &dir : directories) {
-        std::string desiredDir(std::move(dir.string()));
-        auto idx = desiredDir.find_last_of('_');
-        desiredDir = desiredDir.substr(0, idx);
+    for (auto &dir : htmlDirectories) {
         auto absolutePath = std::filesystem::absolute(dir);
         parseDir(stream, absolutePath);
     }
@@ -117,49 +131,42 @@ void parseDirs() {
 }
 
 void parseDir(std::ifstream &stream, const std::filesystem::path &dir) {
-    std::vector<char> temp;
-    std::string contents;
+    static std::string contents;
 
     auto dirIt = std::filesystem::directory_iterator(dir);
     for (auto const &entry : dirIt) {
+        // make the path absolute
         const auto absolutePath = std::filesystem::absolute(entry);
-        stream.open(absolutePath.c_str());
-        if (!stream.good()) {
-            clean(nullptr);
-        }
 
+        // use absolutePath string to open a file and pull insides out
+        openFileAndReadContents(absolutePath.c_str(), contents);
+
+        // construct a path for a .c/.h/.s file
         auto absolutePathStr = absolutePath.string();
         const auto lastUnderscoreIdx = absolutePathStr.find_last_of('_');
         const auto lastSlashIdx = absolutePathStr.find_last_of('/');
         absolutePathStr = absolutePathStr.erase(lastUnderscoreIdx, lastSlashIdx - lastUnderscoreIdx);
         const auto lastDotIdx = absolutePathStr.find_last_of('.');
         absolutePathStr = absolutePathStr.substr(0, lastDotIdx);
-        stream.seekg(0, std::ios::end);
-        uint32_t size = stream.tellg();
-        stream.seekg(0);
-        temp.reserve(size);
-        stream.read(temp.data(), size);
-        if (!stream.good()) {
-            clean(nullptr);
-        }
-        contents = temp.data();
+
+        // TODO(threadedstream): probably, give it another, more appropriate, name
         parse(contents);
         writeValidContentsToFile(contents, absolutePathStr.c_str());
-        temp.clear();
-        stream.close();
+        contents.clear();
     }
 
 }
 
-void downloadFiles() {
+void
+downloadFiles() {
     char command[256], outputFile[128];
     // Start an iteration
-    for (const auto &dir : directories) {
+    for (const auto &dir : htmlDirectories) {
         auto absolutePath = std::filesystem::absolute(dir);
         if (!std::filesystem::exists(absolutePath)) {
             bool created = std::filesystem::create_directory(absolutePath);
             if (!created) {
-                clean(&absolutePath);
+                clean(htmlDirectories, &absolutePath);
             }
         }
         for (const auto file : unixDirFilesMap[dir]) {
@@ -172,12 +179,13 @@ void downloadFiles() {
 }
 
 // TODO(threadedstream): Add error report
-void clean(const std::filesystem::path *problematicDir) {
+void
+clean(const std::array<std::filesystem::path, 5> &dirs, const std::filesystem::path *problematicDir) {
     if (problematicDir == nullptr) {
         goto remove_no_problematic;
     }
 
-    for (const auto &dir : directories) {
+    for (const auto &dir : dirs) {
         if (dir == *problematicDir) {
             // We're done here, since we've reached a final, i.e problematic directory
             exit(INTERNAL_SERVER_ERROR);
@@ -187,22 +195,29 @@ void clean(const std::filesystem::path *problematicDir) {
     }
 
     remove_no_problematic:
-    for (const auto &dir : directories) {
+    for (const auto &dir : htmlDirectories) {
+        std::filesystem::remove_all(dir);
+    }
+
+    for (const auto &dir : cDirectories) {
         std::filesystem::remove_all(dir);
     }
 
     exit(INTERNAL_SERVER_ERROR);
 }
 
-void eliminateHtmlTags(std::string &contents, int &i) {
-    while (contents[i] != '>') {
-        contents[i] = '\0';
+void
+eliminateHtmlTags(std::string &contents, int &i) {
+    while (contents[i] && contents[i] != '>') {
+        contents[i] = '\r';
         i++;
     }
-    contents[i] = '\0';
+    if (contents[i] == '>')
+        contents[i] = '\r';
 }
 
-void parse(std::string &contents) {
+void
+parse(std::string &contents) {
     int32_t i = 0;
     for (; i < contents.length() - 1;) {
         switch (contents[i]) {
@@ -215,10 +230,25 @@ void parse(std::string &contents) {
     }
 }
 
+void parseExperimental(std::string &contents){
+    //const char* htmlTagsRegex = "^[<][a-zA-Z0-9\"=#\t\r]*[>]$";
+//    contents = std::regex_replace(contents, std::regex(htmlTagsRegex), "");
+}
+
+void createCDirectories() {
+    for (const auto &dir : cDirectories) {
+        if (!std::filesystem::exists(dir)) {
+            bool created = std::filesystem::create_directory(dir);
+            if (!created) {
+                clean(cDirectories, nullptr);
+            }
+        }
+    }
+}
 
 void writeValidContentsToFile(std::string &contents, const char *path) {
-    // WARNING(threadedstream): using 1024 as a heuristic value
-    contents.erase(std::remove(contents.begin(), contents.end(), '\0'), contents.end());
+    contents.erase(std::remove(contents.begin(), contents.end(), '\r'), contents.end());
+    contents = std::regex_replace(contents, std::regex(fourDigitsAndColonRegex), "");
 
     std::ofstream stream(path, std::fstream::out | std::fstream::app);
     if (!stream) {
@@ -233,12 +263,39 @@ void writeValidContentsToFile(std::string &contents, const char *path) {
     stream.close();
 }
 
+void openFileAndReadContents(const char* path, std::string& contents){
+    char* ptr;
+    std::ifstream stream(path);
+    if (!stream) {
+        clean({}, nullptr);
+    }
+    stream.seekg(0, std::ios::end);
+    auto size = stream.tellg();
+    ptr = (char*) calloc(size, 1);
+    stream.seekg(std::ios::beg);
+    stream.read(ptr, size);
+    contents = ptr;
+    stream.close();
+    free(ptr);
+}
+
+
 // The sole purpose of function below is to eliminate 4-digit numbers
 // present in the beginning of almost each line in the C file.
 // Got to figure out a way to do it effectively, error-free, and of course
 // scalable
 void eliminateBeginningNums(std::string &contents) {
     int32_t i = 0;
-    for (; i < contents.length();) {
+#if 0
+    for (; i < contents.length() - 4;) {
+        if (isdigit(contents[i]) &&
+            isdigit(contents[i + 1]) &&
+            isdigit(contents[i + 2]) &&
+            isdigit(contents[i + 3])){
+
+            contents.erase(i, 4);
+        }
     }
+#endif
+
 }

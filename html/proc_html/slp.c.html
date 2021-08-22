@@ -1,0 +1,511 @@
+
+<html>
+<head>
+<title>slp.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line1800">1800: </a><font color="#000000">#</font>
+<a name="line1801">1801: </a><font color="#800000">/*</font>
+<a name="line1802">1802: </a><font color="#800000"> */</font>
+<a name="line1803">1803: </a>
+<a name="line1804">1804: </a><font color="#000000">#include "../param.h"</font>
+<a name="line1805">1805: </a><font color="#000000">#include "../user.h"</font>
+<a name="line1806">1806: </a><font color="#000000">#include "../proc.h"</font>
+<a name="line1807">1807: </a><font color="#000000">#include "../text.h"</font>
+<a name="line1808">1808: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line1809">1809: </a><font color="#000000">#include "../file.h"</font>
+<a name="line1810">1810: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line1811">1811: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line1812">1812: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1813">1813: </a><font color="#800000">/*</font>
+<a name="line1814">1814: </a><font color="#800000"> * Create a new process-- the internal version of</font>
+<a name="line1815">1815: </a><font color="#800000"> * sys fork.</font>
+<a name="line1816">1816: </a><font color="#800000"> * It returns 1 in the new process.</font>
+<a name="line1817">1817: </a><font color="#800000"> * How this happens is rather hard to understand.</font>
+<a name="line1818">1818: </a><font color="#800000"> * The essential fact is that the new process is created</font>
+<a name="line1819">1819: </a><font color="#800000"> * in such a way that appears to have started executing</font>
+<a name="line1820">1820: </a><font color="#800000"> * in the same call to newproc as the parent;</font>
+<a name="line1821">1821: </a><font color="#800000"> * but in fact the code that runs is that of swtch.</font>
+<a name="line1822">1822: </a><font color="#800000"> * The subtle implication of the returned value of swtch</font>
+<a name="line1823">1823: </a><font color="#800000"> * (see above) is that this is the value that newproc's</font>
+<a name="line1824">1824: </a><font color="#800000"> * caller in the new process sees.</font>
+<a name="line1825">1825: </a><font color="#800000"> */</font>
+<a name="line1826">1826: </a><font color="#000000"><a name="ewproc"></a>newproc()</font>
+<a name="line1827">1827: </a>{
+<a name="line1828">1828: </a>        int a1, a2;
+<a name="line1829">1829: </a>        <font color="#000000">struct proc</font> *p, *up;
+<a name="line1830">1830: </a>        register <font color="#000000">struct proc</font> *rpp;
+<a name="line1831">1831: </a>        register *rip, n;
+<a name="line1832">1832: </a>
+<a name="line1833">1833: </a>        p = NULL;
+<a name="line1834">1834: </a>        <font color="#800000">/*</font>
+<a name="line1835">1835: </a><font color="#800000">         * First, just locate a slot for a process</font>
+<a name="line1836">1836: </a><font color="#800000">         * and copy the useful info from this process into it.</font>
+<a name="line1837">1837: </a><font color="#800000">         * The panic "cannot happen" because fork has already</font>
+<a name="line1838">1838: </a><font color="#800000">         * checked for the existence of a slot.</font>
+<a name="line1839">1839: </a><font color="#800000">         */</font>
+<a name="line1840">1840: </a><font color="#000000">retry:</font>
+<a name="line1841">1841: </a>        mpid++;
+<a name="line1842">1842: </a>        <font color="#000000">if</font>(mpid &lt; 0) {
+<a name="line1843">1843: </a>                mpid = 0;
+<a name="line1844">1844: </a>                <font color="#000000">goto</font> retry;
+<a name="line1845">1845: </a>        }
+<a name="line1846">1846: </a>        <font color="#000000">for</font>(rpp = &amp;proc[0]; rpp &lt; &amp;proc[NPROC]; rpp++) {
+<a name="line1847">1847: </a>                <font color="#000000">if</font>(rpp-&gt;p_stat == NULL &amp;&amp; p==NULL)
+<a name="line1848">1848: </a>                        p = rpp;
+<a name="line1849">1849: </a>                <font color="#000000">if</font> (rpp-&gt;p_pid==mpid)
+<a name="line1850">1850: </a>                        <font color="#000000">goto</font> retry;
+<a name="line1851">1851: </a>        }
+<a name="line1852">1852: </a>        <font color="#000000">if</font> ((rpp = p)==NULL)
+<a name="line1853">1853: </a>                panic(<font color="#000000">"no procs"</font>);
+<a name="line1854">1854: </a>
+<a name="line1855">1855: </a>        <font color="#800000">/*</font>
+<a name="line1856">1856: </a><font color="#800000">         * make proc entry for new proc</font>
+<a name="line1857">1857: </a><font color="#800000">         */</font>
+<a name="line1858">1858: </a>
+<a name="line1859">1859: </a>        rip = u.u_procp;
+<a name="line1860">1860: </a>        up = rip;
+<a name="line1861">1861: </a>        rpp-&gt;p_stat = SRUN;
+<a name="line1862">1862: </a>        rpp-&gt;p_flag = SLOAD;
+<a name="line1863">1863: </a>        rpp-&gt;p_uid = rip-&gt;p_uid;
+<a name="line1864">1864: </a>        rpp-&gt;p_ttyp = rip-&gt;p_ttyp;
+<a name="line1865">1865: </a>        rpp-&gt;p_nice = rip-&gt;p_nice;
+<a name="line1866">1866: </a>        rpp-&gt;p_textp = rip-&gt;p_textp;
+<a name="line1867">1867: </a>        rpp-&gt;p_pid = mpid;
+<a name="line1868">1868: </a>        rpp-&gt;p_ppid = rip-&gt;p_pid;
+<a name="line1869">1869: </a>        rpp-&gt;p_time = 0;
+<a name="line1870">1870: </a>
+<a name="line1871">1871: </a>        <font color="#800000">/*</font>
+<a name="line1872">1872: </a><font color="#800000">         * make duplicate entries</font>
+<a name="line1873">1873: </a><font color="#800000">         * where needed</font>
+<a name="line1874">1874: </a><font color="#800000">         */</font>
+<a name="line1875">1875: </a>
+<a name="line1876">1876: </a>        <font color="#000000">for</font>(rip = &amp;u.u_ofile[0]; rip &lt; &amp;u.u_ofile[NOFILE];)
+<a name="line1877">1877: </a>                <font color="#000000">if</font>((rpp = *rip++) != NULL)
+<a name="line1878">1878: </a>                        rpp-&gt;f_count++;
+<a name="line1879">1879: </a>        <font color="#000000">if</font>((rpp=up-&gt;p_textp) != NULL) {
+<a name="line1880">1880: </a>                rpp-&gt;x_count++;
+<a name="line1881">1881: </a>                rpp-&gt;x_ccount++;
+<a name="line1882">1882: </a>        }
+<a name="line1883">1883: </a>        u.u_cdir-&gt;i_count++;
+<a name="line1884">1884: </a>        <font color="#800000">/*</font>
+<a name="line1885">1885: </a><font color="#800000">         * Partially simulate the environment</font>
+<a name="line1886">1886: </a><font color="#800000">         * of the new process so that when it is actually</font>
+<a name="line1887">1887: </a><font color="#800000">         * created (by copying) it will look right.</font>
+<a name="line1888">1888: </a><font color="#800000">         */</font>
+<a name="line1889">1889: </a>        savu(u.u_rsav);
+<a name="line1890">1890: </a>        rpp = p;
+<a name="line1891">1891: </a>        u.u_procp = rpp;
+<a name="line1892">1892: </a>        rip = up;
+<a name="line1893">1893: </a>        n = rip-&gt;p_size;
+<a name="line1894">1894: </a>        a1 = rip-&gt;p_addr;
+<a name="line1895">1895: </a>        rpp-&gt;p_size = n;
+<a name="line1896">1896: </a>        a2 = malloc(coremap, n);
+<a name="line1897">1897: </a>        <font color="#800000">/*</font>
+<a name="line1898">1898: </a><font color="#800000">         * If there is not enough core for the</font>
+<a name="line1899">1899: </a><font color="#800000">         * new process, swap out the current process to generate the</font>
+<a name="line1900">1900: </a><font color="#800000">         * copy.</font>
+<a name="line1901">1901: </a><font color="#800000">         */</font>
+<a name="line1902">1902: </a>        <font color="#000000">if</font>(a2 == NULL) {
+<a name="line1903">1903: </a>                rip-&gt;p_stat = SIDL;
+<a name="line1904">1904: </a>                rpp-&gt;p_addr = a1;
+<a name="line1905">1905: </a>                savu(u.u_ssav);
+<a name="line1906">1906: </a>                xswap(rpp, 0, 0);
+<a name="line1907">1907: </a>                rpp-&gt;p_flag =| SSWAP;
+<a name="line1908">1908: </a>                rip-&gt;p_stat = SRUN;
+<a name="line1909">1909: </a>        } <font color="#000000">else</font> {
+<a name="line1910">1910: </a>        <font color="#800000">/*</font>
+<a name="line1911">1911: </a><font color="#800000">         * There is core, so just copy.</font>
+<a name="line1912">1912: </a><font color="#800000">         */</font>
+<a name="line1913">1913: </a>                rpp-&gt;p_addr = a2;
+<a name="line1914">1914: </a>                <font color="#000000">while</font>(n--)
+<a name="line1915">1915: </a>                        copyseg(a1++, a2++);
+<a name="line1916">1916: </a>        }
+<a name="line1917">1917: </a>        u.u_procp = rip;
+<a name="line1918">1918: </a>        <font color="#000000">return</font>(0);
+<a name="line1919">1919: </a>}
+<a name="line1920">1920: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line1921">1921: </a>
+<a name="line1922">1922: </a><font color="#800000">/*</font>
+<a name="line1923">1923: </a><font color="#800000"> * The main loop of the scheduling (swapping)</font>
+<a name="line1924">1924: </a><font color="#800000"> * process.</font>
+<a name="line1925">1925: </a><font color="#800000"> * The basic idea is:</font>
+<a name="line1926">1926: </a><font color="#800000"> *  see if anyone wants to be swapped in;</font>
+<a name="line1927">1927: </a><font color="#800000"> *  swap out processes until there is room;</font>
+<a name="line1928">1928: </a><font color="#800000"> *  swap him in;</font>
+<a name="line1929">1929: </a><font color="#800000"> *  repeat.</font>
+<a name="line1930">1930: </a><font color="#800000"> * Although it is not remarkably evident, the basic</font>
+<a name="line1931">1931: </a><font color="#800000"> * synchronization here is on the runin flag, which is</font>
+<a name="line1932">1932: </a><font color="#800000"> * slept on and is set once per second by the clock routine.</font>
+<a name="line1933">1933: </a><font color="#800000"> * Core shuffling therefore takes place once per second.</font>
+<a name="line1934">1934: </a><font color="#800000"> *</font>
+<a name="line1935">1935: </a><font color="#800000"> * panic: swap error -- IO error while swapping.</font>
+<a name="line1936">1936: </a><font color="#800000"> *      this is the one panic that should be</font>
+<a name="line1937">1937: </a><font color="#800000"> *      handled in a less drastic way. Its</font>
+<a name="line1938">1938: </a><font color="#800000"> *      very hard.</font>
+<a name="line1939">1939: </a><font color="#800000"> */</font>
+<a name="line1940">1940: </a><font color="#000000"><a name="ched"></a>sched()</font>
+<a name="line1941">1941: </a>{
+<a name="line1942">1942: </a>        <font color="#000000">struct proc</font> *p1;
+<a name="line1943">1943: </a>        register <font color="#000000">struct proc</font> *rp;
+<a name="line1944">1944: </a>        register a, n;
+<a name="line1945">1945: </a>
+<a name="line1946">1946: </a>        <font color="#800000">/*</font>
+<a name="line1947">1947: </a><font color="#800000">         * find user to swap in</font>
+<a name="line1948">1948: </a><font color="#800000">         * of users ready, select one out longest</font>
+<a name="line1949">1949: </a><font color="#800000">         */</font>
+<a name="line1950">1950: </a>
+<a name="line1951">1951: </a>        <font color="#000000">goto</font> loop;
+<a name="line1952">1952: </a>
+<a name="line1953">1953: </a><font color="#000000">sloop:</font>
+<a name="line1954">1954: </a>        runin++;
+<a name="line1955">1955: </a>        sleep(&amp;runin, PSWP);
+<a name="line1956">1956: </a>
+<a name="line1957">1957: </a><font color="#000000">loop:</font>
+<a name="line1958">1958: </a>        spl6();
+<a name="line1959">1959: </a>        n = -1;
+<a name="line1960">1960: </a>        <font color="#000000">for</font>(rp = &amp;proc[0]; rp &lt; &amp;proc[NPROC]; rp++)
+<a name="line1961">1961: </a>        <font color="#000000">if</font>(rp-&gt;p_stat==SRUN &amp;&amp; (rp-&gt;p_flag&amp;SLOAD)==0 &amp;&amp;
+<a name="line1962">1962: </a>            rp-&gt;p_time &gt; n) {
+<a name="line1963">1963: </a>                p1 = rp;
+<a name="line1964">1964: </a>                n = rp-&gt;p_time;
+<a name="line1965">1965: </a>        }
+<a name="line1966">1966: </a>        <font color="#000000">if</font>(n == -1) {
+<a name="line1967">1967: </a>                runout++;
+<a name="line1968">1968: </a>                sleep(&amp;runout, PSWP);
+<a name="line1969">1969: </a>                <font color="#000000">goto</font> loop;
+<a name="line1970">1970: </a>        }
+<a name="line1971">1971: </a>
+<a name="line1972">1972: </a>        <font color="#800000">/*</font>
+<a name="line1973">1973: </a><font color="#800000">         * see if there is core for that process</font>
+<a name="line1974">1974: </a><font color="#800000">         */</font>
+<a name="line1975">1975: </a>
+<a name="line1976">1976: </a>        spl0();
+<a name="line1977">1977: </a>        rp = p1;
+<a name="line1978">1978: </a>        a = rp-&gt;p_size;
+<a name="line1979">1979: </a>        <font color="#000000">if</font>((rp=rp-&gt;p_textp) != NULL)
+<a name="line1980">1980: </a>                <font color="#000000">if</font>(rp-&gt;x_ccount == 0)
+<a name="line1981">1981: </a>                        a =+ rp-&gt;x_size;
+<a name="line1982">1982: </a>        <font color="#000000">if</font>((a=malloc(coremap, a)) != NULL)
+<a name="line1983">1983: </a>                <font color="#000000">goto</font> found2;
+<a name="line1984">1984: </a>
+<a name="line1985">1985: </a>        <font color="#800000">/*</font>
+<a name="line1986">1986: </a><font color="#800000">         * none found,</font>
+<a name="line1987">1987: </a><font color="#800000">         * look around for easy core</font>
+<a name="line1988">1988: </a><font color="#800000">         */</font>
+<a name="line1989">1989: </a>
+<a name="line1990">1990: </a>        spl6();
+<a name="line1991">1991: </a>        <font color="#000000">for</font>(rp = &amp;proc[0]; rp &lt; &amp;proc[NPROC]; rp++)
+<a name="line1992">1992: </a>        <font color="#000000">if</font>((rp-&gt;p_flag&amp;(SSYS|SLOCK|SLOAD))==SLOAD &amp;&amp;
+<a name="line1993">1993: </a>            (rp-&gt;p_stat == SWAIT || rp-&gt;p_stat==SSTOP))
+<a name="line1994">1994: </a>                <font color="#000000">goto</font> found1;
+<a name="line1995">1995: </a>
+<a name="line1996">1996: </a>        <font color="#800000">/*</font>
+<a name="line1997">1997: </a><font color="#800000">         * no easy core,</font>
+<a name="line1998">1998: </a><font color="#800000">         * if this process is deserving,</font>
+<a name="line1999">1999: </a><font color="#800000">         * look around for</font>
+<a name="line2000">2000: </a><font color="#800000">         * oldest process in core</font>
+<a name="line2001">2001: </a><font color="#800000">         */</font>
+<a name="line2002">2002: </a>
+<a name="line2003">2003: </a>        <font color="#000000">if</font>(n &lt; 3)
+<a name="line2004">2004: </a>                <font color="#000000">goto</font> sloop;
+<a name="line2005">2005: </a>        n = -1;
+<a name="line2006">2006: </a>        <font color="#000000">for</font>(rp = &amp;proc[0]; rp &lt; &amp;proc[NPROC]; rp++)
+<a name="line2007">2007: </a>        <font color="#000000">if</font>((rp-&gt;p_flag&amp;(SSYS|SLOCK|SLOAD))==SLOAD &amp;&amp;
+<a name="line2008">2008: </a>           (rp-&gt;p_stat==SRUN || rp-&gt;p_stat==SSLEEP) &amp;&amp;
+<a name="line2009">2009: </a>            rp-&gt;p_time &gt; n) {
+<a name="line2010">2010: </a>                p1 = rp;
+<a name="line2011">2011: </a>                n = rp-&gt;p_time;
+<a name="line2012">2012: </a>        }
+<a name="line2013">2013: </a>        <font color="#000000">if</font>(n &lt; 2)
+<a name="line2014">2014: </a>                <font color="#000000">goto</font> sloop;
+<a name="line2015">2015: </a>        rp = p1;
+<a name="line2016">2016: </a>
+<a name="line2017">2017: </a>        <font color="#800000">/*</font>
+<a name="line2018">2018: </a><font color="#800000">         * swap user out</font>
+<a name="line2019">2019: </a><font color="#800000">         */</font>
+<a name="line2020">2020: </a>
+<a name="line2021">2021: </a><font color="#000000">found1:</font>
+<a name="line2022">2022: </a>        spl0();
+<a name="line2023">2023: </a>        rp-&gt;p_flag =&amp; ~SLOAD;
+<a name="line2024">2024: </a>        xswap(rp, 1, 0);
+<a name="line2025">2025: </a>        <font color="#000000">goto</font> loop;
+<a name="line2026">2026: </a>
+<a name="line2027">2027: </a>        <font color="#800000">/*</font>
+<a name="line2028">2028: </a><font color="#800000">         * swap user in</font>
+<a name="line2029">2029: </a><font color="#800000">         */</font>
+<a name="line2030">2030: </a>
+<a name="line2031">2031: </a><font color="#000000">found2:</font>
+<a name="line2032">2032: </a>        <font color="#000000">if</font>((rp=p1-&gt;p_textp) != NULL) {
+<a name="line2033">2033: </a>                <font color="#000000">if</font>(rp-&gt;x_ccount == 0) {
+<a name="line2034">2034: </a>                        <font color="#000000">if</font>(swap(rp-&gt;x_daddr, a, rp-&gt;x_size, B_READ))
+<a name="line2035">2035: </a>                                <font color="#000000">goto</font> swaper;
+<a name="line2036">2036: </a>                        rp-&gt;x_caddr = a;
+<a name="line2037">2037: </a>                        a =+ rp-&gt;x_size;
+<a name="line2038">2038: </a>                }
+<a name="line2039">2039: </a>                rp-&gt;x_ccount++;
+<a name="line2040">2040: </a>        }
+<a name="line2041">2041: </a>        rp = p1;
+<a name="line2042">2042: </a>        <font color="#000000">if</font>(swap(rp-&gt;p_addr, a, rp-&gt;p_size, B_READ))
+<a name="line2043">2043: </a>                <font color="#000000">goto</font> swaper;
+<a name="line2044">2044: </a>        mfree(swapmap, (rp-&gt;p_size+7)/8, rp-&gt;p_addr);
+<a name="line2045">2045: </a>        rp-&gt;p_addr = a;
+<a name="line2046">2046: </a>        rp-&gt;p_flag =| SLOAD;
+<a name="line2047">2047: </a>        rp-&gt;p_time = 0;
+<a name="line2048">2048: </a>        <font color="#000000">goto</font> loop;
+<a name="line2049">2049: </a>
+<a name="line2050">2050: </a><font color="#000000">swaper:</font>
+<a name="line2051">2051: </a>        panic(<font color="#000000">"swap error"</font>);
+<a name="line2052">2052: </a>}
+<a name="line2053">2053: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2054">2054: </a>
+<a name="line2055">2055: </a><font color="#800000">/*</font>
+<a name="line2056">2056: </a><font color="#800000"> * Give up the processor till a wakeup occurs</font>
+<a name="line2057">2057: </a><font color="#800000"> * on chan, at which time the process</font>
+<a name="line2058">2058: </a><font color="#800000"> * enters the scheduling queue at priority pri.</font>
+<a name="line2059">2059: </a><font color="#800000"> * The most important effect of pri is that when</font>
+<a name="line2060">2060: </a><font color="#800000"> * pri&lt;0 a signal cannot disturb the sleep;</font>
+<a name="line2061">2061: </a><font color="#800000"> * if pri&gt;=0 signals will be processed.</font>
+<a name="line2062">2062: </a><font color="#800000"> * Callers of this routine must be prepared for</font>
+<a name="line2063">2063: </a><font color="#800000"> * premature return, and check that the reason for</font>
+<a name="line2064">2064: </a><font color="#800000"> * sleeping has gone away.</font>
+<a name="line2065">2065: </a><font color="#800000"> */</font>
+<a name="line2066">2066: </a><font color="#000000"><a name="leep"></a>sleep(chan, pri)</font>
+<a name="line2067">2067: </a>{
+<a name="line2068">2068: </a>        register *rp, s;
+<a name="line2069">2069: </a>
+<a name="line2070">2070: </a>        s = PS-&gt;integ;
+<a name="line2071">2071: </a>        rp = u.u_procp;
+<a name="line2072">2072: </a>        <font color="#000000">if</font>(pri &gt;= 0) {
+<a name="line2073">2073: </a>                <font color="#000000">if</font>(issig())
+<a name="line2074">2074: </a>                        <font color="#000000">goto</font> psig;
+<a name="line2075">2075: </a>                spl6();
+<a name="line2076">2076: </a>                rp-&gt;p_wchan = chan;
+<a name="line2077">2077: </a>                rp-&gt;p_stat = SWAIT;
+<a name="line2078">2078: </a>                rp-&gt;p_pri = pri;
+<a name="line2079">2079: </a>                spl0();
+<a name="line2080">2080: </a>                <font color="#000000">if</font>(runin != 0) {
+<a name="line2081">2081: </a>                        runin = 0;
+<a name="line2082">2082: </a>                        wakeup(&amp;runin);
+<a name="line2083">2083: </a>                }
+<a name="line2084">2084: </a>                swtch();
+<a name="line2085">2085: </a>                <font color="#000000">if</font>(issig())
+<a name="line2086">2086: </a>                        <font color="#000000">goto</font> psig;
+<a name="line2087">2087: </a>        } <font color="#000000">else</font> {
+<a name="line2088">2088: </a>                spl6();
+<a name="line2089">2089: </a>                rp-&gt;p_wchan = chan;
+<a name="line2090">2090: </a>                rp-&gt;p_stat = SSLEEP;
+<a name="line2091">2091: </a>                rp-&gt;p_pri = pri;
+<a name="line2092">2092: </a>                spl0();
+<a name="line2093">2093: </a>                swtch();
+<a name="line2094">2094: </a>        }
+<a name="line2095">2095: </a>        PS-&gt;integ = s;
+<a name="line2096">2096: </a>        <font color="#000000">return</font>;
+<a name="line2097">2097: </a>
+<a name="line2098">2098: </a>        <font color="#800000">/*</font>
+<a name="line2099">2099: </a><font color="#800000">         * If priority was low (&gt;=0) and</font>
+<a name="line2100">2100: </a><font color="#800000">         * there has been a signal,</font>
+<a name="line2101">2101: </a><font color="#800000">         * execute non-local goto to</font>
+<a name="line2102">2102: </a><font color="#800000">         * the qsav location.</font>
+<a name="line2103">2103: </a><font color="#800000">         * (see trap1/trap.c)</font>
+<a name="line2104">2104: </a><font color="#800000">         */</font>
+<a name="line2105">2105: </a><font color="#000000">psig:</font>
+<a name="line2106">2106: </a>        aretu(u.u_qsav);
+<a name="line2107">2107: </a>}
+<a name="line2108">2108: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2109">2109: </a>
+<a name="line2110">2110: </a><font color="#800000">/*</font>
+<a name="line2111">2111: </a><font color="#800000"> * Wake up all processes sleeping on chan.</font>
+<a name="line2112">2112: </a><font color="#800000"> */</font>
+<a name="line2113">2113: </a><font color="#000000"><a name="akeup"></a>wakeup(chan)</font>
+<a name="line2114">2114: </a>{
+<a name="line2115">2115: </a>        register <font color="#000000">struct proc</font> *p;
+<a name="line2116">2116: </a>        register c, i;
+<a name="line2117">2117: </a>
+<a name="line2118">2118: </a>        c = chan;
+<a name="line2119">2119: </a>        p = &amp;proc[0];
+<a name="line2120">2120: </a>        i = NPROC;
+<a name="line2121">2121: </a>        <font color="#000000">do</font> {
+<a name="line2122">2122: </a>                <font color="#000000">if</font>(p-&gt;p_wchan == c) {
+<a name="line2123">2123: </a>                        setrun(p);
+<a name="line2124">2124: </a>                }
+<a name="line2125">2125: </a>                p++;
+<a name="line2126">2126: </a>        } <font color="#000000">while</font>(--i);
+<a name="line2127">2127: </a>}
+<a name="line2128">2128: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2129">2129: </a>
+<a name="line2130">2130: </a><font color="#800000">/*</font>
+<a name="line2131">2131: </a><font color="#800000"> * Set the process running;</font>
+<a name="line2132">2132: </a><font color="#800000"> * arrange for it to be swapped in if necessary.</font>
+<a name="line2133">2133: </a><font color="#800000"> */</font>
+<a name="line2134">2134: </a><font color="#000000"><a name="etrun"></a>setrun(p)</font>
+<a name="line2135">2135: </a>{
+<a name="line2136">2136: </a>        register <font color="#000000">struct proc</font> *rp;
+<a name="line2137">2137: </a>
+<a name="line2138">2138: </a>        rp = p;
+<a name="line2139">2139: </a>        rp-&gt;p_wchan = 0;
+<a name="line2140">2140: </a>        rp-&gt;p_stat = SRUN;
+<a name="line2141">2141: </a>        <font color="#000000">if</font>(rp-&gt;p_pri &lt; curpri)
+<a name="line2142">2142: </a>                runrun++;
+<a name="line2143">2143: </a>        <font color="#000000">if</font>(runout != 0 &amp;&amp; (rp-&gt;p_flag&amp;SLOAD) == 0) {
+<a name="line2144">2144: </a>                runout = 0;
+<a name="line2145">2145: </a>                wakeup(&amp;runout);
+<a name="line2146">2146: </a>        }
+<a name="line2147">2147: </a>}
+<a name="line2148">2148: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2149">2149: </a>
+<a name="line2150">2150: </a><font color="#800000">/*</font>
+<a name="line2151">2151: </a><font color="#800000"> * Set user priority.</font>
+<a name="line2152">2152: </a><font color="#800000"> * The rescheduling flag (runrun)</font>
+<a name="line2153">2153: </a><font color="#800000"> * is set if the priority is higher</font>
+<a name="line2154">2154: </a><font color="#800000"> * than the currently running process.</font>
+<a name="line2155">2155: </a><font color="#800000"> */</font>
+<a name="line2156">2156: </a><font color="#000000"><a name="etpri"></a>setpri(up)</font>
+<a name="line2157">2157: </a>{
+<a name="line2158">2158: </a>        register *pp, p;
+<a name="line2159">2159: </a>
+<a name="line2160">2160: </a>        pp = up;
+<a name="line2161">2161: </a>        p = (pp-&gt;p_cpu &amp; 0377)/16;
+<a name="line2162">2162: </a>        p =+ PUSER + pp-&gt;p_nice;
+<a name="line2163">2163: </a>        <font color="#000000">if</font>(p &gt; 127)
+<a name="line2164">2164: </a>                p = 127;
+<a name="line2165">2165: </a>        <font color="#000000">if</font>(p &gt; curpri)
+<a name="line2166">2166: </a>                runrun++;
+<a name="line2167">2167: </a>        pp-&gt;p_pri = p;
+<a name="line2168">2168: </a>}
+<a name="line2169">2169: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2170">2170: </a>
+<a name="line2171">2171: </a>
+<a name="line2172">2172: </a><font color="#800000">/*</font>
+<a name="line2173">2173: </a><font color="#800000"> * This routine is called to reschedule the CPU.</font>
+<a name="line2174">2174: </a><font color="#800000"> * if the calling process is not in RUN state,</font>
+<a name="line2175">2175: </a><font color="#800000"> * arrangements for it to restart must have</font>
+<a name="line2176">2176: </a><font color="#800000"> * been made elsewhere, usually by calling via sleep.</font>
+<a name="line2177">2177: </a><font color="#800000"> */</font>
+<a name="line2178">2178: </a><font color="#000000"><a name="wtch"></a>swtch()</font>
+<a name="line2179">2179: </a>{
+<a name="line2180">2180: </a>        static <font color="#000000">struct proc</font> *p;
+<a name="line2181">2181: </a>        register i, n;
+<a name="line2182">2182: </a>        register <font color="#000000">struct proc</font> *rp;
+<a name="line2183">2183: </a>
+<a name="line2184">2184: </a>        <font color="#000000">if</font>(p == NULL)
+<a name="line2185">2185: </a>                p = &amp;proc[0];
+<a name="line2186">2186: </a>        <font color="#800000">/*</font>
+<a name="line2187">2187: </a><font color="#800000">         * Remember stack of caller</font>
+<a name="line2188">2188: </a><font color="#800000">         */</font>
+<a name="line2189">2189: </a>        savu(u.u_rsav);
+<a name="line2190">2190: </a>        <font color="#800000">/*</font>
+<a name="line2191">2191: </a><font color="#800000">         * Switch to scheduler's stack</font>
+<a name="line2192">2192: </a><font color="#800000">         */</font>
+<a name="line2193">2193: </a>        retu(proc[0].p_addr);
+<a name="line2194">2194: </a>
+<a name="line2195">2195: </a><font color="#000000">loop:</font>
+<a name="line2196">2196: </a>        runrun = 0;
+<a name="line2197">2197: </a>        rp = p;
+<a name="line2198">2198: </a>        p = NULL;
+<a name="line2199">2199: </a>        n = 128;
+<a name="line2200">2200: </a>        <font color="#800000">/*</font>
+<a name="line2201">2201: </a><font color="#800000">         * Search for highest-priority runnable process</font>
+<a name="line2202">2202: </a><font color="#800000">         */</font>
+<a name="line2203">2203: </a>        i = NPROC;
+<a name="line2204">2204: </a>        <font color="#000000">do</font> {
+<a name="line2205">2205: </a>                rp++;
+<a name="line2206">2206: </a>                <font color="#000000">if</font>(rp &gt;= &amp;proc[NPROC])
+<a name="line2207">2207: </a>                        rp = &amp;proc[0];
+<a name="line2208">2208: </a>                <font color="#000000">if</font>(rp-&gt;p_stat==SRUN &amp;&amp; (rp-&gt;p_flag&amp;SLOAD)!=0) {
+<a name="line2209">2209: </a>                        <font color="#000000">if</font>(rp-&gt;p_pri &lt; n) {
+<a name="line2210">2210: </a>                                p = rp;
+<a name="line2211">2211: </a>                                n = rp-&gt;p_pri;
+<a name="line2212">2212: </a>                        }
+<a name="line2213">2213: </a>                }
+<a name="line2214">2214: </a>        } <font color="#000000">while</font>(--i);
+<a name="line2215">2215: </a>        <font color="#800000">/*</font>
+<a name="line2216">2216: </a><font color="#800000">         * If no process is runnable, idle.</font>
+<a name="line2217">2217: </a><font color="#800000">         */</font>
+<a name="line2218">2218: </a>        <font color="#000000">if</font>(p == NULL) {
+<a name="line2219">2219: </a>                p = rp;
+<a name="line2220">2220: </a>                idle();
+<a name="line2221">2221: </a>                <font color="#000000">goto</font> loop;
+<a name="line2222">2222: </a>        }
+<a name="line2223">2223: </a>        rp = p;
+<a name="line2224">2224: </a>        curpri = n;
+<a name="line2225">2225: </a>        <font color="#800000">/* Switch to stack of the new process and set up</font>
+<a name="line2226">2226: </a><font color="#800000">         * his segmentation registers.</font>
+<a name="line2227">2227: </a><font color="#800000">         */</font>
+<a name="line2228">2228: </a>        retu(rp-&gt;p_addr);
+<a name="line2229">2229: </a>        sureg();
+<a name="line2230">2230: </a>        <font color="#800000">/*</font>
+<a name="line2231">2231: </a><font color="#800000">         * If the new process paused because it was</font>
+<a name="line2232">2232: </a><font color="#800000">         * swapped out, set the stack level to the last call</font>
+<a name="line2233">2233: </a><font color="#800000">         * to savu(u_ssav).  This means that the return</font>
+<a name="line2234">2234: </a><font color="#800000">         * which is executed immediately after the call to aretu</font>
+<a name="line2235">2235: </a><font color="#800000">         * actually returns from the last routine which did</font>
+<a name="line2236">2236: </a><font color="#800000">         * the savu.</font>
+<a name="line2237">2237: </a><font color="#800000">         *</font>
+<a name="line2238">2238: </a><font color="#800000">         * You are not expected to understand this.</font>
+<a name="line2239">2239: </a><font color="#800000">         */</font>
+<a name="line2240">2240: </a>        <font color="#000000">if</font>(rp-&gt;p_flag&amp;SSWAP) {
+<a name="line2241">2241: </a>                rp-&gt;p_flag =&amp; ~SSWAP;
+<a name="line2242">2242: </a>                aretu(u.u_ssav);
+<a name="line2243">2243: </a>        }
+<a name="line2244">2244: </a>        <font color="#800000">/* The value returned here has many subtle implications.</font>
+<a name="line2245">2245: </a><font color="#800000">         * See the newproc comments.</font>
+<a name="line2246">2246: </a><font color="#800000">         */</font>
+<a name="line2247">2247: </a>        <font color="#000000">return</font>(1);
+<a name="line2248">2248: </a>}
+<a name="line2249">2249: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line2250">2250: </a>
+<a name="line2251">2251: </a><font color="#800000">/*</font>
+<a name="line2252">2252: </a><font color="#800000"> * Change the size of the data+stack regions of the process.</font>
+<a name="line2253">2253: </a><font color="#800000"> * If the size is shrinking, it's easy-- just release the extra core.</font>
+<a name="line2254">2254: </a><font color="#800000"> * If it's growing, and there is core, just allocate it</font>
+<a name="line2255">2255: </a><font color="#800000"> * and copy the image, taking care to reset registers to account</font>
+<a name="line2256">2256: </a><font color="#800000"> * for the fact that the system's stack has moved.</font>
+<a name="line2257">2257: </a><font color="#800000"> *</font>
+<a name="line2258">2258: </a><font color="#800000"> * If there is no core, arrange for the process to be swapped</font>
+<a name="line2259">2259: </a><font color="#800000"> * out after adjusting the size requirement-- when it comes</font>
+<a name="line2260">2260: </a><font color="#800000"> * in, enough core will be allocated.</font>
+<a name="line2261">2261: </a><font color="#800000"> * Because of the ssave and SSWAP flags, control will</font>
+<a name="line2262">2262: </a><font color="#800000"> * resume after the swap in swtch, which executes the return</font>
+<a name="line2263">2263: </a><font color="#800000"> * from this stack level.</font>
+<a name="line2264">2264: </a><font color="#800000"> *</font>
+<a name="line2265">2265: </a><font color="#800000"> * After the expansion, the caller will take care of copying</font>
+<a name="line2266">2266: </a><font color="#800000"> * the user's stack towards or away from the data area.</font>
+<a name="line2267">2267: </a><font color="#800000"> */</font>
+<a name="line2268">2268: </a><font color="#000000"><a name="xpand"></a>expand(newsize)</font>
+<a name="line2269">2269: </a>{
+<a name="line2270">2270: </a>        int i, n;
+<a name="line2271">2271: </a>        register *p, a1, a2;
+<a name="line2272">2272: </a>
+<a name="line2273">2273: </a>        p = u.u_procp;
+<a name="line2274">2274: </a>        n = p-&gt;p_size;
+<a name="line2275">2275: </a>        p-&gt;p_size = newsize;
+<a name="line2276">2276: </a>        a1 = p-&gt;p_addr;
+<a name="line2277">2277: </a>        <font color="#000000">if</font>(n &gt;= newsize) {
+<a name="line2278">2278: </a>                mfree(coremap, n-newsize, a1+newsize);
+<a name="line2279">2279: </a>                <font color="#000000">return</font>;
+<a name="line2280">2280: </a>        }
+<a name="line2281">2281: </a>        savu(u.u_rsav);
+<a name="line2282">2282: </a>        a2 = malloc(coremap, newsize);
+<a name="line2283">2283: </a>        <font color="#000000">if</font>(a2 == NULL) {
+<a name="line2284">2284: </a>                savu(u.u_ssav);
+<a name="line2285">2285: </a>                xswap(p, 1, n);
+<a name="line2286">2286: </a>                p-&gt;p_flag =| SSWAP;
+<a name="line2287">2287: </a>                swtch();
+<a name="line2288">2288: </a>                <font color="#800000">/* no return */</font>
+<a name="line2289">2289: </a>        }
+<a name="line2290">2290: </a>        p-&gt;p_addr = a2;
+<a name="line2291">2291: </a>        <font color="#000000">for</font>(i=0; i&lt;n; i++)
+<a name="line2292">2292: </a>                copyseg(a1+i, a2++);
+<a name="line2293">2293: </a>        mfree(coremap, n, a1);
+<a name="line2294">2294: </a>        retu(p-&gt;p_addr);
+<a name="line2295">2295: </a>        sureg();
+<a name="line2296">2296: </a>}
+<a name="line2297">2297: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

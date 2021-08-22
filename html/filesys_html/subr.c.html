@@ -1,0 +1,211 @@
+
+<html>
+<head>
+<title>subr.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line6400">6400: </a><font color="#000000">#</font>
+<a name="line6401">6401: </a><font color="#000000">#include "../param.h"</font>
+<a name="line6402">6402: </a><font color="#000000">#include "../conf.h"</font>
+<a name="line6403">6403: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line6404">6404: </a><font color="#000000">#include "../user.h"</font>
+<a name="line6405">6405: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line6406">6406: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line6407">6407: </a>
+<a name="line6408">6408: </a><font color="#800000">/* Bmap defines the structure of file system storage</font>
+<a name="line6409">6409: </a><font color="#800000"> * by returning the physical block number on a device given the</font>
+<a name="line6410">6410: </a><font color="#800000"> * inode and the logical block number in a file.</font>
+<a name="line6411">6411: </a><font color="#800000"> * When convenient, it also leaves the physical</font>
+<a name="line6412">6412: </a><font color="#800000"> * block number of the next block of the file in rablock</font>
+<a name="line6413">6413: </a><font color="#800000"> * for use in read-ahead.</font>
+<a name="line6414">6414: </a><font color="#800000"> */</font>
+<a name="line6415">6415: </a><font color="#000000"><a name="map"></a>bmap(ip, bn)</font>
+<a name="line6416">6416: </a><font color="#000000"><a name="inode"></a>struct inode </font>*ip;
+<a name="line6417">6417: </a>int bn;
+<a name="line6418">6418: </a>{
+<a name="line6419">6419: </a>        register *bp, *bap, nb;
+<a name="line6420">6420: </a>        int *nbp, d, i;
+<a name="line6421">6421: </a>
+<a name="line6422">6422: </a>        d = ip-&gt;i_dev;
+<a name="line6423">6423: </a>        <font color="#000000">if</font>(bn &amp; ~077777) {
+<a name="line6424">6424: </a>                u.u_error = EFBIG;
+<a name="line6425">6425: </a>                <font color="#000000">return</font>(0);
+<a name="line6426">6426: </a>        }
+<a name="line6427">6427: </a>        <font color="#000000">if</font>((ip-&gt;i_mode&amp;ILARG) == 0) {
+<a name="line6428">6428: </a>
+<a name="line6429">6429: </a>                <font color="#800000">/* small file algorithm */</font>
+<a name="line6430">6430: </a>
+<a name="line6431">6431: </a>                <font color="#000000">if</font>((bn &amp; ~7) != 0) {
+<a name="line6432">6432: </a>
+<a name="line6433">6433: </a>                        <font color="#800000">/* convert small to large */</font>
+<a name="line6434">6434: </a>
+<a name="line6435">6435: </a>                        <font color="#000000">if</font> ((bp = alloc(d)) == NULL)
+<a name="line6436">6436: </a>                                <font color="#000000">return</font>(NULL);
+<a name="line6437">6437: </a>                        bap = bp-&gt;b_addr;
+<a name="line6438">6438: </a>                        <font color="#000000">for</font>(i=0; i&lt;8; i++) {
+<a name="line6439">6439: </a>                                *bap++ = ip-&gt;i_addr[i];
+<a name="line6440">6440: </a>                                ip-&gt;i_addr[i] = 0;
+<a name="line6441">6441: </a>                        }
+<a name="line6442">6442: </a>                        ip-&gt;i_addr[0] = bp-&gt;b_blkno;
+<a name="line6443">6443: </a>                        bdwrite(bp);
+<a name="line6444">6444: </a>                        ip-&gt;i_mode =| ILARG;
+<a name="line6445">6445: </a>                        <font color="#000000">goto</font> large;
+<a name="line6446">6446: </a>                }
+<a name="line6447">6447: </a>                nb = ip-&gt;i_addr[bn];
+<a name="line6448">6448: </a>                <font color="#000000">if</font>(nb == 0 &amp;&amp; (bp = alloc(d)) != NULL) {
+<a name="line6449">6449: </a>                        bdwrite(bp);
+<a name="line6450">6450: </a>                        nb = bp-&gt;b_blkno;
+<a name="line6451">6451: </a>                        ip-&gt;i_addr[bn] = nb;
+<a name="line6452">6452: </a>                        ip-&gt;i_flag =| IUPD;
+<a name="line6453">6453: </a>                }
+<a name="line6454">6454: </a>                rablock = 0;
+<a name="line6455">6455: </a>                <font color="#000000">if</font> (bn&lt;7)
+<a name="line6456">6456: </a>                        rablock = ip-&gt;i_addr[bn+1];
+<a name="line6457">6457: </a>                <font color="#000000">return</font>(nb);
+<a name="line6458">6458: </a>        }
+<a name="line6459">6459: </a>
+<a name="line6460">6460: </a>        <font color="#800000">/* large file algorithm */</font>
+<a name="line6461">6461: </a>
+<a name="line6462">6462: </a><font color="#000000">    large:</font>
+<a name="line6463">6463: </a>        i = bn&gt;&gt;8;
+<a name="line6464">6464: </a>        <font color="#000000">if</font>(bn &amp; 0174000)
+<a name="line6465">6465: </a>                i = 7;
+<a name="line6466">6466: </a>        <font color="#000000">if</font>((nb=ip-&gt;i_addr[i]) == 0) {
+<a name="line6467">6467: </a>                ip-&gt;i_flag =| IUPD;
+<a name="line6468">6468: </a>                <font color="#000000">if</font> ((bp = alloc(d)) == NULL)
+<a name="line6469">6469: </a>                        <font color="#000000">return</font>(NULL);
+<a name="line6470">6470: </a>                ip-&gt;i_addr[i] = bp-&gt;b_blkno;
+<a name="line6471">6471: </a>        } <font color="#000000">else</font>
+<a name="line6472">6472: </a>                bp = bread(d, nb);
+<a name="line6473">6473: </a>        bap = bp-&gt;b_addr;
+<a name="line6474">6474: </a>
+<a name="line6475">6475: </a>        <font color="#800000">/* "huge" fetch of double indirect block */</font>
+<a name="line6476">6476: </a>
+<a name="line6477">6477: </a>        <font color="#000000">if</font>(i == 7) {
+<a name="line6478">6478: </a>                i = ((bn&gt;&gt;8) &amp; 0377) - 7;
+<a name="line6479">6479: </a>                <font color="#000000">if</font>((nb=bap[i]) == 0) {
+<a name="line6480">6480: </a>                        <font color="#000000">if</font>((nbp = alloc(d)) == NULL) {
+<a name="line6481">6481: </a>                                brelse(bp);
+<a name="line6482">6482: </a>                                <font color="#000000">return</font>(NULL);
+<a name="line6483">6483: </a>                        }
+<a name="line6484">6484: </a>                        bap[i] = nbp-&gt;b_blkno;
+<a name="line6485">6485: </a>                        bdwrite(bp);
+<a name="line6486">6486: </a>                } <font color="#000000">else</font> {
+<a name="line6487">6487: </a>                        brelse(bp);
+<a name="line6488">6488: </a>                        nbp = bread(d, nb);
+<a name="line6489">6489: </a>                }
+<a name="line6490">6490: </a>                bp = nbp;
+<a name="line6491">6491: </a>                bap = bp-&gt;b_addr;
+<a name="line6492">6492: </a>        }
+<a name="line6493">6493: </a>
+<a name="line6494">6494: </a>        <font color="#800000">/* normal indirect fetch */</font>
+<a name="line6495">6495: </a>
+<a name="line6496">6496: </a>        i = bn &amp; 0377;
+<a name="line6497">6497: </a>        <font color="#000000">if</font>((nb=bap[i]) == 0 &amp;&amp; (nbp = alloc(d)) != NULL) {
+<a name="line6498">6498: </a>                nb = nbp-&gt;b_blkno;
+<a name="line6499">6499: </a>                bap[i] = nb;
+<a name="line6500">6500: </a>                bdwrite(nbp);
+<a name="line6501">6501: </a>                bdwrite(bp);
+<a name="line6502">6502: </a>        } <font color="#000000">else</font>
+<a name="line6503">6503: </a>                brelse(bp);
+<a name="line6504">6504: </a>        rablock = 0;
+<a name="line6505">6505: </a>        <font color="#000000">if</font>(i &lt; 255)
+<a name="line6506">6506: </a>                rablock = bap[i+1];
+<a name="line6507">6507: </a>        <font color="#000000">return</font>(nb);
+<a name="line6508">6508: </a>}
+<a name="line6509">6509: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6510">6510: </a>
+<a name="line6511">6511: </a><font color="#800000">/*</font>
+<a name="line6512">6512: </a><font color="#800000"> * Pass back  c  to the user at his location u_base;</font>
+<a name="line6513">6513: </a><font color="#800000"> * update u_base, u_count, and u_offset.  Return -1</font>
+<a name="line6514">6514: </a><font color="#800000"> * on the last character of the user's read.</font>
+<a name="line6515">6515: </a><font color="#800000"> * u_base is in the user address space unless u_segflg is set.</font>
+<a name="line6516">6516: </a><font color="#800000"> */</font>
+<a name="line6517">6517: </a><font color="#000000"><a name="assc"></a>passc(c)</font>
+<a name="line6518">6518: </a>char c;
+<a name="line6519">6519: </a>{
+<a name="line6520">6520: </a>
+<a name="line6521">6521: </a>        <font color="#000000">if</font>(u.u_segflg)
+<a name="line6522">6522: </a>                *u.u_base = c; <font color="#000000">else</font>
+<a name="line6523">6523: </a>                <font color="#000000">if</font>(subyte(u.u_base, c) &lt; 0) {
+<a name="line6524">6524: </a>                        u.u_error = EFAULT;
+<a name="line6525">6525: </a>                        <font color="#000000">return</font>(-1);
+<a name="line6526">6526: </a>                }
+<a name="line6527">6527: </a>        u.u_count--;
+<a name="line6528">6528: </a>        <font color="#000000">if</font>(++u.u_offset[1] == 0)
+<a name="line6529">6529: </a>                u.u_offset[0]++;
+<a name="line6530">6530: </a>        u.u_base++;
+<a name="line6531">6531: </a>        <font color="#000000">return</font>(u.u_count == 0? -1: 0);
+<a name="line6532">6532: </a>}
+<a name="line6533">6533: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6534">6534: </a>
+<a name="line6535">6535: </a><font color="#800000">/*</font>
+<a name="line6536">6536: </a><font color="#800000"> * Pick up and return the next character from the user's</font>
+<a name="line6537">6537: </a><font color="#800000"> * write call at location u_base;</font>
+<a name="line6538">6538: </a><font color="#800000"> * update u_base, u_count, and u_offset.  Return -1</font>
+<a name="line6539">6539: </a><font color="#800000"> * when u_count is exhausted.  u_base is in the user's</font>
+<a name="line6540">6540: </a><font color="#800000"> * address space unless u_segflg is set.</font>
+<a name="line6541">6541: </a><font color="#800000"> */</font>
+<a name="line6542">6542: </a><font color="#000000"><a name="pass"></a>cpass()</font>
+<a name="line6543">6543: </a>{
+<a name="line6544">6544: </a>        register c;
+<a name="line6545">6545: </a>
+<a name="line6546">6546: </a>        <font color="#000000">if</font>(u.u_count == 0)
+<a name="line6547">6547: </a>                <font color="#000000">return</font>(-1);
+<a name="line6548">6548: </a>        <font color="#000000">if</font>(u.u_segflg)
+<a name="line6549">6549: </a>                c = *u.u_base; <font color="#000000">else</font>
+<a name="line6550">6550: </a>                <font color="#000000">if</font>((c=fubyte(u.u_base)) &lt; 0) {
+<a name="line6551">6551: </a>                        u.u_error = EFAULT;
+<a name="line6552">6552: </a>                        <font color="#000000">return</font>(-1);
+<a name="line6553">6553: </a>                }
+<a name="line6554">6554: </a>        u.u_count--;
+<a name="line6555">6555: </a>        <font color="#000000">if</font>(++u.u_offset[1] == 0)
+<a name="line6556">6556: </a>                u.u_offset[0]++;
+<a name="line6557">6557: </a>        u.u_base++;
+<a name="line6558">6558: </a>        <font color="#000000">return</font>(c&amp;0377);
+<a name="line6559">6559: </a>}
+<a name="line6560">6560: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6561">6561: </a>
+<a name="line6562">6562: </a><font color="#800000">/*</font>
+<a name="line6563">6563: </a><font color="#800000"> * Routine which sets a user error; placed in</font>
+<a name="line6564">6564: </a><font color="#800000"> * illegal entries in the bdevsw and cdevsw tables.</font>
+<a name="line6565">6565: </a><font color="#800000"> */</font>
+<a name="line6566">6566: </a><font color="#000000"><a name="odev"></a>nodev()</font>
+<a name="line6567">6567: </a>{
+<a name="line6568">6568: </a>
+<a name="line6569">6569: </a>        u.u_error = ENODEV;
+<a name="line6570">6570: </a>}
+<a name="line6571">6571: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6572">6572: </a>
+<a name="line6573">6573: </a><font color="#800000">/*</font>
+<a name="line6574">6574: </a><font color="#800000"> * Null routine; placed in insignificant entries</font>
+<a name="line6575">6575: </a><font color="#800000"> * in the bdevsw and cdevsw tables.</font>
+<a name="line6576">6576: </a><font color="#800000"> */</font>
+<a name="line6577">6577: </a><font color="#000000"><a name="ulldev"></a>nulldev()</font>
+<a name="line6578">6578: </a>{
+<a name="line6579">6579: </a>}
+<a name="line6580">6580: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line6581">6581: </a>
+<a name="line6582">6582: </a><font color="#800000">/*</font>
+<a name="line6583">6583: </a><font color="#800000"> * copy count words from from to to.</font>
+<a name="line6584">6584: </a><font color="#800000"> */</font>
+<a name="line6585">6585: </a><font color="#000000"><a name="copy"></a>bcopy(from, to, count)</font>
+<a name="line6586">6586: </a>int *from, *to;
+<a name="line6587">6587: </a>{
+<a name="line6588">6588: </a>        register *a, *b, c;
+<a name="line6589">6589: </a>
+<a name="line6590">6590: </a>        a = from;
+<a name="line6591">6591: </a>        b = to;
+<a name="line6592">6592: </a>        c = count;
+<a name="line6593">6593: </a>        <font color="#000000">do</font>
+<a name="line6594">6594: </a>                *b++ = *a++;
+<a name="line6595">6595: </a>        <font color="#000000">while</font>(--c);
+<a name="line6596">6596: </a>}
+<a name="line6597">6597: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

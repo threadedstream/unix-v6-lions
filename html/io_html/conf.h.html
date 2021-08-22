@@ -1,0 +1,61 @@
+
+<html>
+<head>
+<title>conf.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line4600">4600: </a><font color="#800000">/* Used to dissect integer device code</font>
+<a name="line4601">4601: </a><font color="#800000"> * into major (driver designation) and</font>
+<a name="line4602">4602: </a><font color="#800000"> * minor (driver parameter) parts.</font>
+<a name="line4603">4603: </a><font color="#800000"> */</font>
+<a name="line4604">4604: </a><font color="#000000">struct</font>  {
+<a name="line4605">4605: </a>        char    d_minor;
+<a name="line4606">4606: </a>        char    d_major;
+<a name="line4607">4607: </a>};
+<a name="line4608">4608: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4609">4609: </a><font color="#800000">/* Declaration of block device</font>
+<a name="line4610">4610: </a><font color="#800000"> * switch. Each entry (row) is</font>
+<a name="line4611">4611: </a><font color="#800000"> * the only link between the</font>
+<a name="line4612">4612: </a><font color="#800000"> * main unix code and the driver.</font>
+<a name="line4613">4613: </a><font color="#800000"> * The initialization of the</font>
+<a name="line4614">4614: </a><font color="#800000"> * device switches is in the</font>
+<a name="line4615">4615: </a><font color="#800000"> * file conf.c.</font>
+<a name="line4616">4616: </a><font color="#800000"> */</font>
+<a name="line4617">4617: </a><font color="#000000">struct</font>  bdevsw  {
+<a name="line4618">4618: </a>        int     (*d_open)();
+<a name="line4619">4619: </a>        int     (*d_close)();
+<a name="line4620">4620: </a>        int     (*d_strategy)();
+<a name="line4621">4621: </a>        int     *d_tab;
+<a name="line4622">4622: </a>} bdevsw[];
+<a name="line4623">4623: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4624">4624: </a><font color="#800000">/* Nblkdev is the number of entries</font>
+<a name="line4625">4625: </a><font color="#800000"> * (rows) in the block switch. It is</font>
+<a name="line4626">4626: </a><font color="#800000"> * set in binit/bio.c by making</font>
+<a name="line4627">4627: </a><font color="#800000"> * a pass over the switch.</font>
+<a name="line4628">4628: </a><font color="#800000"> * Used in bounds checking on major</font>
+<a name="line4629">4629: </a><font color="#800000"> * device numbers.</font>
+<a name="line4630">4630: </a><font color="#800000"> */</font>
+<a name="line4631">4631: </a>int     nblkdev;
+<a name="line4632">4632: </a>
+<a name="line4633">4633: </a><font color="#800000">/* Character device switch.</font>
+<a name="line4634">4634: </a><font color="#800000"> */</font>
+<a name="line4635">4635: </a><font color="#000000">struct</font>  cdevsw  {
+<a name="line4636">4636: </a>        int     (*d_open)();
+<a name="line4637">4637: </a>        int     (*d_close)();
+<a name="line4638">4638: </a>        int     (*d_read)();
+<a name="line4639">4639: </a>        int     (*d_write)();
+<a name="line4640">4640: </a>        int     (*d_sgtty)();
+<a name="line4641">4641: </a>} cdevsw[];
+<a name="line4642">4642: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line4643">4643: </a>
+<a name="line4644">4644: </a><font color="#800000">/* Number of character switch entries.</font>
+<a name="line4645">4645: </a><font color="#800000"> * Set by cinit/tty.c</font>
+<a name="line4646">4646: </a><font color="#800000"> */</font>
+<a name="line4647">4647: </a>int     nchrdev;
+</pre>
+</body>
+
+</html>

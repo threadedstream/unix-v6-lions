@@ -1,0 +1,212 @@
+
+<html>
+<head>
+<title>nami.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line7500">7500: </a><font color="#000000">#</font>
+<a name="line7501">7501: </a><font color="#000000">#include "../param.h"</font>
+<a name="line7502">7502: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line7503">7503: </a><font color="#000000">#include "../user.h"</font>
+<a name="line7504">7504: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line7505">7505: </a><font color="#000000">#include "../buf.h"</font>
+<a name="line7506">7506: </a>
+<a name="line7507">7507: </a><font color="#800000">/*</font>
+<a name="line7508">7508: </a><font color="#800000"> * Convert a pathname into a pointer to</font>
+<a name="line7509">7509: </a><font color="#800000"> * an inode. Note that the inode is locked.</font>
+<a name="line7510">7510: </a><font color="#800000"> *</font>
+<a name="line7511">7511: </a><font color="#800000"> * func = function called to get next char of name</font>
+<a name="line7512">7512: </a><font color="#800000"> *      &amp;uchar if name is in user space</font>
+<a name="line7513">7513: </a><font color="#800000"> *      &amp;schar if name is in system space</font>
+<a name="line7514">7514: </a><font color="#800000"> * flag = 0 if name is sought</font>
+<a name="line7515">7515: </a><font color="#800000"> *      1 if name is to be created</font>
+<a name="line7516">7516: </a><font color="#800000"> *      2 if name is to be deleted</font>
+<a name="line7517">7517: </a><font color="#800000"> */</font>
+<a name="line7518">7518: </a><font color="#000000">namei(func, flag)</font>
+<a name="line7519">7519: </a><font color="#000000">int (*func)()</font>;
+<a name="line7520">7520: </a>{
+<a name="line7521">7521: </a>        register <font color="#000000">struct inode</font> *dp;
+<a name="line7522">7522: </a>        register c;
+<a name="line7523">7523: </a>        register char *cp;
+<a name="line7524">7524: </a>        int eo, *bp;
+<a name="line7525">7525: </a>
+<a name="line7526">7526: </a>        <font color="#800000">/*</font>
+<a name="line7527">7527: </a><font color="#800000">         * If name starts with '/' start from</font>
+<a name="line7528">7528: </a><font color="#800000">         * root; otherwise start from current dir.</font>
+<a name="line7529">7529: </a><font color="#800000">         */</font>
+<a name="line7530">7530: </a>
+<a name="line7531">7531: </a>        dp = u.u_cdir;
+<a name="line7532">7532: </a>        <font color="#000000">if</font>((c=(*func)()) == '/')
+<a name="line7533">7533: </a>                dp = rootdir;
+<a name="line7534">7534: </a>        iget(dp-&gt;i_dev, dp-&gt;i_number);
+<a name="line7535">7535: </a>        <font color="#000000">while</font>(c == '/')
+<a name="line7536">7536: </a>                c = (*func)();
+<a name="line7537">7537: </a>        <font color="#000000">if</font>(c == '\0' &amp;&amp; flag != 0) {
+<a name="line7538">7538: </a>                u.u_error = ENOENT;
+<a name="line7539">7539: </a>                <font color="#000000">goto</font> out;
+<a name="line7540">7540: </a>        }
+<a name="line7541">7541: </a>
+<a name="line7542">7542: </a><font color="#000000">cloop:</font>
+<a name="line7543">7543: </a>        <font color="#800000">/*</font>
+<a name="line7544">7544: </a><font color="#800000">         * Here dp contains pointer</font>
+<a name="line7545">7545: </a><font color="#800000">         * to last component matched.</font>
+<a name="line7546">7546: </a><font color="#800000">         */</font>
+<a name="line7547">7547: </a>
+<a name="line7548">7548: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line7549">7549: </a>                <font color="#000000">goto</font> out;
+<a name="line7550">7550: </a>        <font color="#000000">if</font>(c == '\0')
+<a name="line7551">7551: </a>                <font color="#000000">return</font>(dp);
+<a name="line7552">7552: </a>
+<a name="line7553">7553: </a>        <font color="#800000">/*</font>
+<a name="line7554">7554: </a><font color="#800000">         * If there is another component,</font>
+<a name="line7555">7555: </a><font color="#800000">         * dp must be a directory and</font>
+<a name="line7556">7556: </a><font color="#800000">         * must have x permission.</font>
+<a name="line7557">7557: </a><font color="#800000">         */</font>
+<a name="line7558">7558: </a>
+<a name="line7559">7559: </a>        <font color="#000000">if</font>((dp-&gt;i_mode&amp;IFMT) != IFDIR) {
+<a name="line7560">7560: </a>                u.u_error = ENOTDIR;
+<a name="line7561">7561: </a>                <font color="#000000">goto</font> out;
+<a name="line7562">7562: </a>        }
+<a name="line7563">7563: </a>        <font color="#000000">if</font>(access(dp, IEXEC))
+<a name="line7564">7564: </a>                <font color="#000000">goto</font> out;
+<a name="line7565">7565: </a>
+<a name="line7566">7566: </a>        <font color="#800000">/* Gather up name into</font>
+<a name="line7567">7567: </a><font color="#800000">         * users' dir buffer.</font>
+<a name="line7568">7568: </a><font color="#800000">         */</font>
+<a name="line7569">7569: </a>
+<a name="line7570">7570: </a>        cp = &amp;u.u_dbuf[0];
+<a name="line7571">7571: </a>        <font color="#000000">while</font>(c!='/' &amp;&amp; c!='\0' &amp;&amp; u.u_error==0) {
+<a name="line7572">7572: </a>                <font color="#000000">if</font>(cp &lt; &amp;u.u_dbuf[DIRSIZ])
+<a name="line7573">7573: </a>                        *cp++ = c;
+<a name="line7574">7574: </a>                c = (*func)();
+<a name="line7575">7575: </a>        }
+<a name="line7576">7576: </a>        <font color="#000000">while</font>(cp &lt; &amp;u.u_dbuf[DIRSIZ])
+<a name="line7577">7577: </a>                *cp++ = '\0';
+<a name="line7578">7578: </a>        <font color="#000000">while</font>(c == '/')
+<a name="line7579">7579: </a>                c = (*func)();
+<a name="line7580">7580: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line7581">7581: </a>                <font color="#000000">goto</font> out;
+<a name="line7582">7582: </a>
+<a name="line7583">7583: </a>        <font color="#800000">/* Set up to search a directory. */</font>
+<a name="line7584">7584: </a>
+<a name="line7585">7585: </a>        u.u_offset[1] = 0;
+<a name="line7586">7586: </a>        u.u_offset[0] = 0;
+<a name="line7587">7587: </a>        u.u_segflg = 1;
+<a name="line7588">7588: </a>        eo = 0;
+<a name="line7589">7589: </a>        u.u_count = ldiv(dp-&gt;i_size1, DIRSIZ+2);
+<a name="line7590">7590: </a>        bp = NULL;
+<a name="line7591">7591: </a>
+<a name="line7592">7592: </a><font color="#000000">eloop:</font>
+<a name="line7593">7593: </a>
+<a name="line7594">7594: </a>        <font color="#800000">/*</font>
+<a name="line7595">7595: </a><font color="#800000">         * If at the end of the directory,</font>
+<a name="line7596">7596: </a><font color="#800000">         * the search failed. Report what</font>
+<a name="line7597">7597: </a><font color="#800000">         * is appropriate as per flag.</font>
+<a name="line7598">7598: </a><font color="#800000">         */</font>
+<a name="line7599">7599: </a>
+<a name="line7600">7600: </a>        <font color="#000000">if</font>(u.u_count == 0) {
+<a name="line7601">7601: </a>                <font color="#000000">if</font>(bp != NULL)
+<a name="line7602">7602: </a>                        brelse(bp);
+<a name="line7603">7603: </a>                <font color="#000000">if</font>(flag==1 &amp;&amp; c=='\0') {
+<a name="line7604">7604: </a>                        <font color="#000000">if</font>(access(dp, IWRITE))
+<a name="line7605">7605: </a>                                <font color="#000000">goto</font> out;
+<a name="line7606">7606: </a>                        u.u_pdir = dp;
+<a name="line7607">7607: </a>                        <font color="#000000">if</font>(eo)
+<a name="line7608">7608: </a>                                u.u_offset[1] = eo-DIRSIZ-2; <font color="#000000">else</font>
+<a name="line7609">7609: </a>                                dp-&gt;i_flag =| IUPD;
+<a name="line7610">7610: </a>                        <font color="#000000">return</font>(NULL);
+<a name="line7611">7611: </a>                }
+<a name="line7612">7612: </a>                u.u_error = ENOENT;
+<a name="line7613">7613: </a>                <font color="#000000">goto</font> out;
+<a name="line7614">7614: </a>        }
+<a name="line7615">7615: </a>
+<a name="line7616">7616: </a>        <font color="#800000">/*</font>
+<a name="line7617">7617: </a><font color="#800000">         * If offset is on a block boundary,</font>
+<a name="line7618">7618: </a><font color="#800000">         * read the next directory block.</font>
+<a name="line7619">7619: </a><font color="#800000">         * Release previous if it exists.</font>
+<a name="line7620">7620: </a><font color="#800000">         */</font>
+<a name="line7621">7621: </a>
+<a name="line7622">7622: </a>        <font color="#000000">if</font>((u.u_offset[1]&amp;0777) == 0) {
+<a name="line7623">7623: </a>                <font color="#000000">if</font>(bp != NULL)
+<a name="line7624">7624: </a>                        brelse(bp);
+<a name="line7625">7625: </a>                bp = bread(dp-&gt;i_dev,
+<a name="line7626">7626: </a>                        bmap(dp, ldiv(u.u_offset[1], 512)));
+<a name="line7627">7627: </a>        }
+<a name="line7628">7628: </a>
+<a name="line7629">7629: </a>        <font color="#800000">/* Note first empty directory slot</font>
+<a name="line7630">7630: </a><font color="#800000">         * in eo for possible creat.</font>
+<a name="line7631">7631: </a><font color="#800000">         * String compare the directory entry</font>
+<a name="line7632">7632: </a><font color="#800000">         * and the current component.</font>
+<a name="line7633">7633: </a><font color="#800000">         * If they do not match, go back to eloop.</font>
+<a name="line7634">7634: </a><font color="#800000">         */</font>
+<a name="line7635">7635: </a>
+<a name="line7636">7636: </a>        bcopy(bp-&gt;b_addr+(u.u_offset[1]&amp;0777), &amp;u.u_dent, (DIRSIZ+2)/2);
+<a name="line7637">7637: </a>
+<a name="line7638">7638: </a>        u.u_offset[1] =+ DIRSIZ+2;
+<a name="line7639">7639: </a>        u.u_count--;
+<a name="line7640">7640: </a>        <font color="#000000">if</font>(u.u_dent.u_ino == 0) {
+<a name="line7641">7641: </a>                <font color="#000000">if</font>(eo == 0)
+<a name="line7642">7642: </a>                        eo = u.u_offset[1];
+<a name="line7643">7643: </a>                <font color="#000000">goto</font> eloop;
+<a name="line7644">7644: </a>        }
+<a name="line7645">7645: </a>        <font color="#000000">for</font>(cp = &amp;u.u_dbuf[0]; cp &lt; &amp;u.u_dbuf[DIRSIZ]; cp++)
+<a name="line7646">7646: </a>                <font color="#000000">if</font>(*cp != cp[u.u_dent.u_name - u.u_dbuf])
+<a name="line7647">7647: </a>                        <font color="#000000">goto</font> eloop;
+<a name="line7648">7648: </a>
+<a name="line7649">7649: </a>
+<a name="line7650">7650: </a>        <font color="#800000">/* Here a component matched in a directory.</font>
+<a name="line7651">7651: </a><font color="#800000">         * If there is more pathname, go back to</font>
+<a name="line7652">7652: </a><font color="#800000">         * cloop, otherwise return.</font>
+<a name="line7653">7653: </a><font color="#800000">         */</font>
+<a name="line7654">7654: </a>
+<a name="line7655">7655: </a>        <font color="#000000">if</font>(bp != NULL)
+<a name="line7656">7656: </a>                brelse(bp);
+<a name="line7657">7657: </a>        <font color="#000000">if</font>(flag==2 &amp;&amp; c=='\0') {
+<a name="line7658">7658: </a>                <font color="#000000">if</font>(access(dp, IWRITE))
+<a name="line7659">7659: </a>                        <font color="#000000">goto</font> out;
+<a name="line7660">7660: </a>                <font color="#000000">return</font>(dp);
+<a name="line7661">7661: </a>        }
+<a name="line7662">7662: </a>        bp = dp-&gt;i_dev;
+<a name="line7663">7663: </a>        iput(dp);
+<a name="line7664">7664: </a>        dp = iget(bp, u.u_dent.u_ino);
+<a name="line7665">7665: </a>        <font color="#000000">if</font>(dp == NULL)
+<a name="line7666">7666: </a>                <font color="#000000">return</font>(NULL);
+<a name="line7667">7667: </a>        <font color="#000000">goto</font> cloop;
+<a name="line7668">7668: </a>
+<a name="line7669">7669: </a><font color="#000000">out:</font>
+<a name="line7670">7670: </a>        iput(dp);
+<a name="line7671">7671: </a>        <font color="#000000">return</font>(NULL);
+<a name="line7672">7672: </a>}
+<a name="line7673">7673: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7674">7674: </a>
+<a name="line7675">7675: </a><font color="#800000">/*</font>
+<a name="line7676">7676: </a><font color="#800000"> * Return the next character from the</font>
+<a name="line7677">7677: </a><font color="#800000"> * kernel string pointed at by dirp.</font>
+<a name="line7678">7678: </a><font color="#800000"> */</font>
+<a name="line7679">7679: </a><font color="#000000"><a name="char"></a>schar()</font>
+<a name="line7680">7680: </a>{
+<a name="line7681">7681: </a>
+<a name="line7682">7682: </a>        <font color="#000000">return</font>(*u.u_dirp++ &amp; 0377);
+<a name="line7683">7683: </a>}
+<a name="line7684">7684: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line7685">7685: </a>
+<a name="line7686">7686: </a><font color="#800000">/* Return the next character from the</font>
+<a name="line7687">7687: </a><font color="#800000"> * user string pointed at by dirp.</font>
+<a name="line7688">7688: </a><font color="#800000"> */</font>
+<a name="line7689">7689: </a><font color="#000000"><a name="char"></a>uchar()</font>
+<a name="line7690">7690: </a>{
+<a name="line7691">7691: </a>        register c;
+<a name="line7692">7692: </a>
+<a name="line7693">7693: </a>        c = fubyte(u.u_dirp++);
+<a name="line7694">7694: </a>        <font color="#000000">if</font>(c == -1)
+<a name="line7695">7695: </a>                u.u_error = EFAULT;
+<a name="line7696">7696: </a>        <font color="#000000">return</font>(c);
+<a name="line7697">7697: </a>}
+<a name="line7698">7698: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

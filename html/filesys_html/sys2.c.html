@@ -1,0 +1,312 @@
+
+<html>
+<head>
+<title>sys2.c</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5700">5700: </a><font color="#000000">#</font>
+<a name="line5701">5701: </a><font color="#000000">#include "../param.h"</font>
+<a name="line5702">5702: </a><font color="#000000">#include "../systm.h"</font>
+<a name="line5703">5703: </a><font color="#000000">#include "../user.h"</font>
+<a name="line5704">5704: </a><font color="#000000">#include "../reg.h"</font>
+<a name="line5705">5705: </a><font color="#000000">#include "../file.h"</font>
+<a name="line5706">5706: </a><font color="#000000">#include "../inode.h"</font>
+<a name="line5707">5707: </a>
+<a name="line5708">5708: </a><font color="#800000">/*</font>
+<a name="line5709">5709: </a><font color="#800000"> * read system call</font>
+<a name="line5710">5710: </a><font color="#800000"> */</font>
+<a name="line5711">5711: </a><font color="#000000"><a name="ead"></a>read()</font>
+<a name="line5712">5712: </a>{
+<a name="line5713">5713: </a>        rdwr(FREAD);
+<a name="line5714">5714: </a>}
+<a name="line5715">5715: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5716">5716: </a>
+<a name="line5717">5717: </a><font color="#800000">/*</font>
+<a name="line5718">5718: </a><font color="#800000"> * write system call</font>
+<a name="line5719">5719: </a><font color="#800000"> */</font>
+<a name="line5720">5720: </a><font color="#000000"><a name="rite"></a>write()</font>
+<a name="line5721">5721: </a>{
+<a name="line5722">5722: </a>        rdwr(FWRITE);
+<a name="line5723">5723: </a>}
+<a name="line5724">5724: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5725">5725: </a>
+<a name="line5726">5726: </a><font color="#800000">/*</font>
+<a name="line5727">5727: </a><font color="#800000"> * common code for read and write calls:</font>
+<a name="line5728">5728: </a><font color="#800000"> * check permissions, set base, count, and offset,</font>
+<a name="line5729">5729: </a><font color="#800000"> * and switch out to readi, writei, or pipe code.</font>
+<a name="line5730">5730: </a><font color="#800000"> */</font>
+<a name="line5731">5731: </a><font color="#000000"><a name="dwr"></a>rdwr(mode)</font>
+<a name="line5732">5732: </a>{
+<a name="line5733">5733: </a>        register *fp, m;
+<a name="line5734">5734: </a>
+<a name="line5735">5735: </a>        m = mode;
+<a name="line5736">5736: </a>        fp = getf(u.u_ar0[R0]);
+<a name="line5737">5737: </a>        <font color="#000000">if</font>(fp == NULL)
+<a name="line5738">5738: </a>                <font color="#000000">return</font>;
+<a name="line5739">5739: </a>        <font color="#000000">if</font>((fp-&gt;f_flag&amp;m) == 0) {
+<a name="line5740">5740: </a>                u.u_error = EBADF;
+<a name="line5741">5741: </a>                <font color="#000000">return</font>;
+<a name="line5742">5742: </a>        }
+<a name="line5743">5743: </a>        u.u_base = u.u_arg[0];
+<a name="line5744">5744: </a>        u.u_count = u.u_arg[1];
+<a name="line5745">5745: </a>        u.u_segflg = 0;
+<a name="line5746">5746: </a>        <font color="#000000">if</font>(fp-&gt;f_flag&amp;FPIPE) {
+<a name="line5747">5747: </a>                <font color="#000000">if</font>(m==FREAD)
+<a name="line5748">5748: </a>                        readp(fp); <font color="#000000">else</font>
+<a name="line5749">5749: </a>                        writep(fp);
+<a name="line5750">5750: </a>        } <font color="#000000">else</font> {
+<a name="line5751">5751: </a>                u.u_offset[1] = fp-&gt;f_offset[1];
+<a name="line5752">5752: </a>                u.u_offset[0] = fp-&gt;f_offset[0];
+<a name="line5753">5753: </a>                <font color="#000000">if</font>(m==FREAD)
+<a name="line5754">5754: </a>                        readi(fp-&gt;f_inode); <font color="#000000">else</font>
+<a name="line5755">5755: </a>                        writei(fp-&gt;f_inode);
+<a name="line5756">5756: </a>                dpadd(fp-&gt;f_offset, u.u_arg[1]-u.u_count);
+<a name="line5757">5757: </a>        }
+<a name="line5758">5758: </a>        u.u_ar0[R0] = u.u_arg[1]-u.u_count;
+<a name="line5759">5759: </a>}
+<a name="line5760">5760: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5761">5761: </a>
+<a name="line5762">5762: </a><font color="#800000">/*</font>
+<a name="line5763">5763: </a><font color="#800000"> * open system call</font>
+<a name="line5764">5764: </a><font color="#800000"> */</font>
+<a name="line5765">5765: </a><font color="#000000"><a name="pen"></a>open()</font>
+<a name="line5766">5766: </a>{
+<a name="line5767">5767: </a>        register *ip;
+<a name="line5768">5768: </a>        extern uchar;
+<a name="line5769">5769: </a>
+<a name="line5770">5770: </a>        ip = namei(&amp;uchar, 0);
+<a name="line5771">5771: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line5772">5772: </a>                <font color="#000000">return</font>;
+<a name="line5773">5773: </a>        u.u_arg[1]++;
+<a name="line5774">5774: </a>        open1(ip, u.u_arg[1], 0);
+<a name="line5775">5775: </a>}
+<a name="line5776">5776: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5777">5777: </a>
+<a name="line5778">5778: </a><font color="#800000">/*</font>
+<a name="line5779">5779: </a><font color="#800000"> * creat system call</font>
+<a name="line5780">5780: </a><font color="#800000"> */</font>
+<a name="line5781">5781: </a><font color="#000000"><a name="reat"></a>creat()</font>
+<a name="line5782">5782: </a>{
+<a name="line5783">5783: </a>        register *ip;
+<a name="line5784">5784: </a>        extern uchar;
+<a name="line5785">5785: </a>
+<a name="line5786">5786: </a>        ip = namei(&amp;uchar, 1);
+<a name="line5787">5787: </a>        <font color="#000000">if</font>(ip == NULL) {
+<a name="line5788">5788: </a>                <font color="#000000">if</font>(u.u_error)
+<a name="line5789">5789: </a>                        <font color="#000000">return</font>;
+<a name="line5790">5790: </a>                ip = maknode(u.u_arg[1]&amp;07777&amp;(~ISVTX));
+<a name="line5791">5791: </a>                <font color="#000000">if</font> (ip==NULL)
+<a name="line5792">5792: </a>                        <font color="#000000">return</font>;
+<a name="line5793">5793: </a>                open1(ip, FWRITE, 2);
+<a name="line5794">5794: </a>        } <font color="#000000">else</font>
+<a name="line5795">5795: </a>                open1(ip, FWRITE, 1);
+<a name="line5796">5796: </a>}
+<a name="line5797">5797: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5798">5798: </a>
+<a name="line5799">5799: </a><font color="#800000">/*</font>
+<a name="line5800">5800: </a><font color="#800000"> * common code for open and creat.</font>
+<a name="line5801">5801: </a><font color="#800000"> * Check permissions, allocate an open file structure,</font>
+<a name="line5802">5802: </a><font color="#800000"> * and call the device open routine if any.</font>
+<a name="line5803">5803: </a><font color="#800000"> */</font>
+<a name="line5804">5804: </a><font color="#000000"><a name="pen1"></a>open1(ip, mode, trf)</font>
+<a name="line5805">5805: </a>int *ip;
+<a name="line5806">5806: </a>{
+<a name="line5807">5807: </a>        register <font color="#000000">struct file</font> *fp;
+<a name="line5808">5808: </a>        register *rip, m;
+<a name="line5809">5809: </a>        int i;
+<a name="line5810">5810: </a>
+<a name="line5811">5811: </a>        rip = ip;
+<a name="line5812">5812: </a>        m = mode;
+<a name="line5813">5813: </a>        <font color="#000000">if</font>(trf != 2) {
+<a name="line5814">5814: </a>                <font color="#000000">if</font>(m&amp;FREAD)
+<a name="line5815">5815: </a>                        access(rip, IREAD);
+<a name="line5816">5816: </a>                <font color="#000000">if</font>(m&amp;FWRITE) {
+<a name="line5817">5817: </a>                        access(rip, IWRITE);
+<a name="line5818">5818: </a>                        <font color="#000000">if</font>((rip-&gt;i_mode&amp;IFMT) == IFDIR)
+<a name="line5819">5819: </a>                                u.u_error = EISDIR;
+<a name="line5820">5820: </a>                }
+<a name="line5821">5821: </a>        }
+<a name="line5822">5822: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line5823">5823: </a>                <font color="#000000">goto</font> out;
+<a name="line5824">5824: </a>        <font color="#000000">if</font>(trf)
+<a name="line5825">5825: </a>                itrunc(rip);
+<a name="line5826">5826: </a>        prele(rip);
+<a name="line5827">5827: </a>        <font color="#000000">if</font> ((fp = falloc()) == NULL)
+<a name="line5828">5828: </a>                <font color="#000000">goto</font> out;
+<a name="line5829">5829: </a>        fp-&gt;f_flag = m&amp;(FREAD|FWRITE);
+<a name="line5830">5830: </a>        fp-&gt;f_inode = rip;
+<a name="line5831">5831: </a>        i = u.u_ar0[R0];
+<a name="line5832">5832: </a>        openi(rip, m&amp;FWRITE);
+<a name="line5833">5833: </a>        <font color="#000000">if</font>(u.u_error == 0)
+<a name="line5834">5834: </a>                <font color="#000000">return</font>;
+<a name="line5835">5835: </a>        u.u_ofile[i] = NULL;
+<a name="line5836">5836: </a>        fp-&gt;f_count--;
+<a name="line5837">5837: </a>
+<a name="line5838">5838: </a><font color="#000000">out:</font>
+<a name="line5839">5839: </a>        iput(rip);
+<a name="line5840">5840: </a>}
+<a name="line5841">5841: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5842">5842: </a>
+<a name="line5843">5843: </a><font color="#800000">/*</font>
+<a name="line5844">5844: </a><font color="#800000"> * close system call</font>
+<a name="line5845">5845: </a><font color="#800000"> */</font>
+<a name="line5846">5846: </a><font color="#000000"><a name="lose"></a>close()</font>
+<a name="line5847">5847: </a>{
+<a name="line5848">5848: </a>        register *fp;
+<a name="line5849">5849: </a>
+<a name="line5850">5850: </a>        fp = getf(u.u_ar0[R0]);
+<a name="line5851">5851: </a>        <font color="#000000">if</font>(fp == NULL)
+<a name="line5852">5852: </a>                <font color="#000000">return</font>;
+<a name="line5853">5853: </a>        u.u_ofile[u.u_ar0[R0]] = NULL;
+<a name="line5854">5854: </a>        closef(fp);
+<a name="line5855">5855: </a>}
+<a name="line5856">5856: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5857">5857: </a>
+<a name="line5858">5858: </a><font color="#800000">/*</font>
+<a name="line5859">5859: </a><font color="#800000"> * seek system call</font>
+<a name="line5860">5860: </a><font color="#800000"> */</font>
+<a name="line5861">5861: </a><font color="#000000"><a name="eek"></a>seek()</font>
+<a name="line5862">5862: </a>{
+<a name="line5863">5863: </a>        int n[2];
+<a name="line5864">5864: </a>        register *fp, t;
+<a name="line5865">5865: </a>
+<a name="line5866">5866: </a>        fp = getf(u.u_ar0[R0]);
+<a name="line5867">5867: </a>        <font color="#000000">if</font>(fp == NULL)
+<a name="line5868">5868: </a>                <font color="#000000">return</font>;
+<a name="line5869">5869: </a>        <font color="#000000">if</font>(fp-&gt;f_flag&amp;FPIPE) {
+<a name="line5870">5870: </a>                u.u_error = ESPIPE;
+<a name="line5871">5871: </a>                <font color="#000000">return</font>;
+<a name="line5872">5872: </a>        }
+<a name="line5873">5873: </a>        t = u.u_arg[1];
+<a name="line5874">5874: </a>        <font color="#000000">if</font>(t &gt; 2) {
+<a name="line5875">5875: </a>                n[1] = u.u_arg[0]&lt;&lt;9;
+<a name="line5876">5876: </a>                n[0] = u.u_arg[0]&gt;&gt;7;
+<a name="line5877">5877: </a>                <font color="#000000">if</font>(t == 3)
+<a name="line5878">5878: </a>                        n[0] =&amp; 0777;
+<a name="line5879">5879: </a>        } <font color="#000000">else</font> {
+<a name="line5880">5880: </a>                n[1] = u.u_arg[0];
+<a name="line5881">5881: </a>                n[0] = 0;
+<a name="line5882">5882: </a>                <font color="#000000">if</font>(t!=0 &amp;&amp; n[1]&lt;0)
+<a name="line5883">5883: </a>                        n[0] = -1;
+<a name="line5884">5884: </a>        }
+<a name="line5885">5885: </a>        <font color="#000000">switch</font>(t) {
+<a name="line5886">5886: </a>
+<a name="line5887">5887: </a>        <font color="#000000">case</font> 1:
+<a name="line5888">5888: </a>        <font color="#000000">case</font> 4:
+<a name="line5889">5889: </a>                n[0] =+ fp-&gt;f_offset[0];
+<a name="line5890">5890: </a>                dpadd(n, fp-&gt;f_offset[1]);
+<a name="line5891">5891: </a>                <font color="#000000">break</font>;
+<a name="line5892">5892: </a>
+<a name="line5893">5893: </a><font color="#000000">        default:</font>
+<a name="line5894">5894: </a>                n[0] =+ fp-&gt;f_inode-&gt;i_size0&amp;0377;
+<a name="line5895">5895: </a>                dpadd(n, fp-&gt;f_inode-&gt;i_size1);
+<a name="line5896">5896: </a>
+<a name="line5897">5897: </a>        <font color="#000000">case</font> 0:
+<a name="line5898">5898: </a>        <font color="#000000">case</font> 3:
+<a name="line5899">5899: </a>                ;
+<a name="line5900">5900: </a>        }
+<a name="line5901">5901: </a>        fp-&gt;f_offset[1] = n[1];
+<a name="line5902">5902: </a>        fp-&gt;f_offset[0] = n[0];
+<a name="line5903">5903: </a>}
+<a name="line5904">5904: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5905">5905: </a>
+<a name="line5906">5906: </a><font color="#800000">/*</font>
+<a name="line5907">5907: </a><font color="#800000"> * link system call</font>
+<a name="line5908">5908: </a><font color="#800000"> */</font>
+<a name="line5909">5909: </a><font color="#000000"><a name="ink"></a>link()</font>
+<a name="line5910">5910: </a>{
+<a name="line5911">5911: </a>        register *ip, *xp;
+<a name="line5912">5912: </a>        extern uchar;
+<a name="line5913">5913: </a>
+<a name="line5914">5914: </a>        ip = namei(&amp;uchar, 0);
+<a name="line5915">5915: </a>        <font color="#000000">if</font>(ip == NULL)
+<a name="line5916">5916: </a>                <font color="#000000">return</font>;
+<a name="line5917">5917: </a>        <font color="#000000">if</font>(ip-&gt;i_nlink &gt;= 127) {
+<a name="line5918">5918: </a>                u.u_error = EMLINK;
+<a name="line5919">5919: </a>                <font color="#000000">goto</font> out;
+<a name="line5920">5920: </a>        }
+<a name="line5921">5921: </a>        <font color="#000000">if</font>((ip-&gt;i_mode&amp;IFMT)==IFDIR &amp;&amp; !suser())
+<a name="line5922">5922: </a>                <font color="#000000">goto</font> out;
+<a name="line5923">5923: </a>        <font color="#800000">/*</font>
+<a name="line5924">5924: </a><font color="#800000">         * unlock to avoid possibly hanging the namei</font>
+<a name="line5925">5925: </a><font color="#800000">         */</font>
+<a name="line5926">5926: </a>        ip-&gt;i_flag =&amp; ~ILOCK;
+<a name="line5927">5927: </a>        u.u_dirp = u.u_arg[1];
+<a name="line5928">5928: </a>        xp = namei(&amp;uchar, 1);
+<a name="line5929">5929: </a>        <font color="#000000">if</font>(xp != NULL) {
+<a name="line5930">5930: </a>                u.u_error = EEXIST;
+<a name="line5931">5931: </a>                iput(xp);
+<a name="line5932">5932: </a>        }
+<a name="line5933">5933: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line5934">5934: </a>                <font color="#000000">goto</font> out;
+<a name="line5935">5935: </a>        <font color="#000000">if</font>(u.u_pdir-&gt;i_dev != ip-&gt;i_dev) {
+<a name="line5936">5936: </a>                iput(u.u_pdir);
+<a name="line5937">5937: </a>                u.u_error = EXDEV;
+<a name="line5938">5938: </a>                <font color="#000000">goto</font> out;
+<a name="line5939">5939: </a>        }
+<a name="line5940">5940: </a>        wdir(ip);
+<a name="line5941">5941: </a>        ip-&gt;i_nlink++;
+<a name="line5942">5942: </a>        ip-&gt;i_flag =| IUPD;
+<a name="line5943">5943: </a>
+<a name="line5944">5944: </a><font color="#000000">out:</font>
+<a name="line5945">5945: </a>        iput(ip);
+<a name="line5946">5946: </a>}
+<a name="line5947">5947: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5948">5948: </a>
+<a name="line5949">5949: </a><font color="#800000">/*</font>
+<a name="line5950">5950: </a><font color="#800000"> * mknod system call</font>
+<a name="line5951">5951: </a><font color="#800000"> */</font>
+<a name="line5952">5952: </a><font color="#000000"><a name="knod"></a>mknod()</font>
+<a name="line5953">5953: </a>{
+<a name="line5954">5954: </a>        register *ip;
+<a name="line5955">5955: </a>        extern uchar;
+<a name="line5956">5956: </a>
+<a name="line5957">5957: </a>        <font color="#000000">if</font>(suser()) {
+<a name="line5958">5958: </a>                ip = namei(&amp;uchar, 1);
+<a name="line5959">5959: </a>                <font color="#000000">if</font>(ip != NULL) {
+<a name="line5960">5960: </a>                        u.u_error = EEXIST;
+<a name="line5961">5961: </a>                        <font color="#000000">goto</font> out;
+<a name="line5962">5962: </a>                }
+<a name="line5963">5963: </a>        }
+<a name="line5964">5964: </a>        <font color="#000000">if</font>(u.u_error)
+<a name="line5965">5965: </a>                <font color="#000000">return</font>;
+<a name="line5966">5966: </a>        ip = maknode(u.u_arg[1]);
+<a name="line5967">5967: </a>        <font color="#000000">if</font> (ip==NULL)
+<a name="line5968">5968: </a>                <font color="#000000">return</font>;
+<a name="line5969">5969: </a>        ip-&gt;i_addr[0] = u.u_arg[2];
+<a name="line5970">5970: </a>
+<a name="line5971">5971: </a><font color="#000000">out:</font>
+<a name="line5972">5972: </a>        iput(ip);
+<a name="line5973">5973: </a>}
+<a name="line5974">5974: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5975">5975: </a>
+<a name="line5976">5976: </a><font color="#800000">/* sleep system call</font>
+<a name="line5977">5977: </a><font color="#800000"> * not to be confused with the sleep internal routine.</font>
+<a name="line5978">5978: </a><font color="#800000"> */</font>
+<a name="line5979">5979: </a><font color="#000000"><a name="slep"></a>sslep()</font>
+<a name="line5980">5980: </a>{
+<a name="line5981">5981: </a>        char *d[2];
+<a name="line5982">5982: </a>
+<a name="line5983">5983: </a>        spl7();
+<a name="line5984">5984: </a>        d[0] = time[0];
+<a name="line5985">5985: </a>        d[1] = time[1];
+<a name="line5986">5986: </a>        dpadd(d, u.u_ar0[R0]);
+<a name="line5987">5987: </a>
+<a name="line5988">5988: </a>        <font color="#000000">while</font>(dpcmp(d[0], d[1], time[0], time[1]) &gt; 0) {
+<a name="line5989">5989: </a>                <font color="#000000">if</font>(dpcmp(tout[0], tout[1], time[0], time[1]) &lt;= 0 ||
+<a name="line5990">5990: </a>                   dpcmp(tout[0], tout[1], d[0], d[1]) &gt; 0) {
+<a name="line5991">5991: </a>                        tout[0] = d[0];
+<a name="line5992">5992: </a>                        tout[1] = d[1];
+<a name="line5993">5993: </a>                }
+<a name="line5994">5994: </a>                sleep(tout, PSLEP);
+<a name="line5995">5995: </a>        }
+<a name="line5996">5996: </a>        spl0();
+<a name="line5997">5997: </a>}
+<a name="line5998">5998: </a><font color="#800000">/* ---------------------------       */</font>
+</pre>
+</body>
+
+</html>

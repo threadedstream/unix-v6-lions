@@ -1,0 +1,62 @@
+
+<html>
+<head>
+<title>inode.h</title>
+<meta name="generator" content="c2html 0.9.5">
+<meta name="date" content="2003-04-13T09:21:55+00:00">
+</head>
+
+<body bgcolor="#FFFFFF">
+<pre width="80"><a name="line5650">5650: </a><font color="#800000">/* The I node is the focus of all</font>
+<a name="line5651">5651: </a><font color="#800000"> * file activity in unix. There is a unique</font>
+<a name="line5652">5652: </a><font color="#800000"> * inode allocated for each active file,</font>
+<a name="line5653">5653: </a><font color="#800000"> * each current directory, each mounted-on</font>
+<a name="line5654">5654: </a><font color="#800000"> * file, text file, and the root. An inode is 'named'</font>
+<a name="line5655">5655: </a><font color="#800000"> * by its dev/inumber pair. (iget/iget.c)</font>
+<a name="line5656">5656: </a><font color="#800000"> * Data, from mode on, is read in</font>
+<a name="line5657">5657: </a><font color="#800000"> * from permanent inode on volume.</font>
+<a name="line5658">5658: </a><font color="#800000"> */</font>
+<a name="line5659">5659: </a><font color="#000000">struct</font>  inode
+<a name="line5660">5660: </a>{
+<a name="line5661">5661: </a>        char    i_flag;
+<a name="line5662">5662: </a>        char    i_count;        <font color="#800000">/* reference count */</font>
+<a name="line5663">5663: </a>        int     i_dev;          <font color="#800000">/* device where inode resides */</font>
+<a name="line5664">5664: </a>        int     i_number;       <font color="#800000">/* i number, 1-to-1 with device address */</font>
+<a name="line5665">5665: </a>
+<a name="line5666">5666: </a>        int     i_mode;
+<a name="line5667">5667: </a>        char    i_nlink;        <font color="#800000">/* directory entries */</font>
+<a name="line5668">5668: </a>        char    i_uid;          <font color="#800000">/* owner */</font>
+<a name="line5669">5669: </a>        char    i_gid;          <font color="#800000">/* group of owner */</font>
+<a name="line5670">5670: </a>        char    i_size0;        <font color="#800000">/* most significant of size */</font>
+<a name="line5671">5671: </a>        char    *i_size1;       <font color="#800000">/* least sig */</font>
+<a name="line5672">5672: </a>        int     i_addr[8];      <font color="#800000">/* device addresses constituting file */</font>
+<a name="line5673">5673: </a>        int     i_lastr;        <font color="#800000">/* last logical block read (for read-ahead) */</font>
+<a name="line5674">5674: </a>
+<a name="line5675">5675: </a>} inode[NINODE];
+<a name="line5676">5676: </a><font color="#800000">/* ---------------------------       */</font>
+<a name="line5677">5677: </a>
+<a name="line5678">5678: </a><font color="#800000">/* flags */</font>
+<a name="line5679">5679: </a><font color="#000000">#define ILOCK   01              </font><font color="#800000">/* inode is locked */</font><font color="#000000"></font>
+<a name="line5680">5680: </a><font color="#000000">#define IUPD    02              </font><font color="#800000">/* inode has been modified */</font><font color="#000000"></font>
+<a name="line5681">5681: </a><font color="#000000">#define IACC    04              </font><font color="#800000">/* inode access time to be updated */</font><font color="#000000"></font>
+<a name="line5682">5682: </a><font color="#000000">#define IMOUNT  010             </font><font color="#800000">/* inode is mounted on */</font><font color="#000000"></font>
+<a name="line5683">5683: </a><font color="#000000">#define IWANT   020             </font><font color="#800000">/* some process waiting on lock */</font><font color="#000000"></font>
+<a name="line5684">5684: </a><font color="#000000">#define ITEXT   040             </font><font color="#800000">/* inode is pure text prototype */</font><font color="#000000"></font>
+<a name="line5685">5685: </a>
+<a name="line5686">5686: </a><font color="#800000">/* modes */</font>
+<a name="line5687">5687: </a><font color="#000000">#define IALLOC  0100000         </font><font color="#800000">/* file is used */</font><font color="#000000"></font>
+<a name="line5688">5688: </a><font color="#000000">#define IFMT    060000          </font><font color="#800000">/* type of file */</font><font color="#000000"></font>
+<a name="line5689">5689: </a><font color="#000000">#define         IFDIR   040000  </font><font color="#800000">/* directory */</font><font color="#000000"></font>
+<a name="line5690">5690: </a><font color="#000000">#define         IFCHR   020000  </font><font color="#800000">/* character special */</font><font color="#000000"></font>
+<a name="line5691">5691: </a><font color="#000000">#define         IFBLK   060000  </font><font color="#800000">/* block special, 0 is regular */</font><font color="#000000"></font>
+<a name="line5692">5692: </a><font color="#000000">#define ILARG   010000          </font><font color="#800000">/* large addressing algorithm */</font><font color="#000000"></font>
+<a name="line5693">5693: </a><font color="#000000">#define ISUID   04000           </font><font color="#800000">/* set user id on execution */</font><font color="#000000"></font>
+<a name="line5694">5694: </a><font color="#000000">#define ISGID   02000           </font><font color="#800000">/* set group id on execution */</font><font color="#000000"></font>
+<a name="line5695">5695: </a><font color="#000000">#define ISVTX   01000           </font><font color="#800000">/* save swapped text even after use */</font><font color="#000000"></font>
+<a name="line5696">5696: </a><font color="#000000">#define IREAD   0400            </font><font color="#800000">/* read, write, execute permissions */</font><font color="#000000"></font>
+<a name="line5697">5697: </a><font color="#000000">#define IWRITE  0200</font>
+<a name="line5698">5698: </a><font color="#000000">#define IEXEC   0100</font>
+</pre>
+</body>
+
+</html>
