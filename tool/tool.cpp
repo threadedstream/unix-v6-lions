@@ -66,7 +66,7 @@ static std::array<std::filesystem::path, 5> cDirectories = {
         "specf",
 };
 
-static const char* fourDigitsAndColonRegex = "[0-9]{4}[:]";
+static const char *fourDigitsAndColonRegex = "[0-9]{4}[:]";
 
 
 static std::map<std::filesystem::path, std::vector<const char *>> unixDirFilesMap = {
@@ -89,48 +89,42 @@ static std::map<std::filesystem::path, std::vector<const char *>> unixDirFilesMa
 };
 
 
-void parse(std::string &contents);
-
-void parseExperimental(std::string &contents);
-
-std::string parseFile(const char *path);
-
-void parseDir(std::ifstream &stream, const std::filesystem::path &path);
-
-void parseDirs();
-
-void eliminateHtmlTags(std::string &contents, int &i);
-
-void writeValidContentsToFile(std::string &contents, const char *fileName);
-
-void downloadFiles();
+void clean(const std::array<std::filesystem::path, 5> &dirs, const std::filesystem::path *problematicDir);
 
 void createCDirectories();
 
-void openFileAndReadContents(const char* path, std::string& contents);
+void downloadFiles();
 
-void clean(const std::array<std::filesystem::path, 5> &dirs, const std::filesystem::path *problematicDir);
+void eliminateHtmlTags(std::string &contents, int &i);
+
+void openFileAndReadContents(const char *path, std::string &contents);
+
+void parse(std::string &contents);
+
+void parseDir(const std::filesystem::path &path);
+
+void parseDirs();
+
+void writeValidContentsToFile(const char *fileName, std::string &contents,);
 
 
-int main(int argc, char *argv[]) {
+int
+main(int argc, char *argv[]) {
     downloadFiles();
     createCDirectories();
     parseDirs();
 }
 
-void parseDirs() {
-    std::ifstream stream;
-    if (!stream) {
-        clean(cDirectories, nullptr);
-    }
+void
+parseDirs() {
     for (auto &dir : htmlDirectories) {
         auto absolutePath = std::filesystem::absolute(dir);
-        parseDir(stream, absolutePath);
+        parseDir(absolutePath);
     }
-    stream.close();
 }
 
-void parseDir(std::ifstream &stream, const std::filesystem::path &dir) {
+void
+parseDir(const std::filesystem::path &dir) {
     static std::string contents;
 
     auto dirIt = std::filesystem::directory_iterator(dir);
@@ -151,7 +145,7 @@ void parseDir(std::ifstream &stream, const std::filesystem::path &dir) {
 
         // TODO(threadedstream): probably, give it another, more appropriate, name
         parse(contents);
-        writeValidContentsToFile(contents, absolutePathStr.c_str());
+        writeValidContentsToFile(absolutePathStr.c_str(), contents);
         contents.clear();
     }
 
@@ -230,12 +224,9 @@ parse(std::string &contents) {
     }
 }
 
-void parseExperimental(std::string &contents){
-    //const char* htmlTagsRegex = "^[<][a-zA-Z0-9\"=#\t\r]*[>]$";
-//    contents = std::regex_replace(contents, std::regex(htmlTagsRegex), "");
-}
 
-void createCDirectories() {
+void
+createCDirectories() {
     for (const auto &dir : cDirectories) {
         if (!std::filesystem::exists(dir)) {
             bool created = std::filesystem::create_directory(dir);
@@ -246,7 +237,8 @@ void createCDirectories() {
     }
 }
 
-void writeValidContentsToFile(std::string &contents, const char *path) {
+void
+writeValidContentsToFile(const char *path, std::string &contents) {
     contents.erase(std::remove(contents.begin(), contents.end(), '\r'), contents.end());
     contents = std::regex_replace(contents, std::regex(fourDigitsAndColonRegex), "");
 
@@ -263,39 +255,19 @@ void writeValidContentsToFile(std::string &contents, const char *path) {
     stream.close();
 }
 
-void openFileAndReadContents(const char* path, std::string& contents){
-    char* ptr;
+void
+openFileAndReadContents(const char *path, std::string &contents) {
+    char *ptr;
     std::ifstream stream(path);
     if (!stream) {
         clean({}, nullptr);
     }
     stream.seekg(0, std::ios::end);
     auto size = stream.tellg();
-    ptr = (char*) calloc(size, 1);
+    ptr = (char *) calloc(size, 1);
     stream.seekg(std::ios::beg);
     stream.read(ptr, size);
     contents = ptr;
     stream.close();
     free(ptr);
-}
-
-
-// The sole purpose of function below is to eliminate 4-digit numbers
-// present in the beginning of almost each line in the C file.
-// Got to figure out a way to do it effectively, error-free, and of course
-// scalable
-void eliminateBeginningNums(std::string &contents) {
-    int32_t i = 0;
-#if 0
-    for (; i < contents.length() - 4;) {
-        if (isdigit(contents[i]) &&
-            isdigit(contents[i + 1]) &&
-            isdigit(contents[i + 2]) &&
-            isdigit(contents[i + 3])){
-
-            contents.erase(i, 4);
-        }
-    }
-#endif
-
 }
